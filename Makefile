@@ -28,17 +28,12 @@ else
 	Q =
 endif
 
-ifeq ($(OS),Windows_NT)
-	# mingw builds crash with LTO
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	# OSX needs workaround for AVX, and LTO is broken
+	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47785
+	CXXFLAGS += -Wa,-q
 	CXXFLAGS := $(filter-out -flto,$(CXXFLAGS))
-else
-	UNAME_S := $(shell uname -s)
-	ifeq ($(UNAME_S),Darwin)
-		# OSX needs workaround for AVX, and LTO is broken
-		# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47785
-		CXXFLAGS += -Wa,-q
-		CXXFLAGS := $(filter-out -flto,$(CXXFLAGS))
-	endif
 endif
 
 .PHONY: clean web
