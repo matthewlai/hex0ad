@@ -7,6 +7,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/string_cast.hpp"
 
+#include "platform_includes.h"
+
 #include <cstddef>
 #include <iostream>
 

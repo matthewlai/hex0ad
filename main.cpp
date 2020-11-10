@@ -3,14 +3,11 @@
 #include <memory>
 #include <stdexcept>
 
-#include <GLES3/gl3.h>
-#include <GLES3/gl2ext.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengles2.h>
-
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
+
+#include "platform_includes.h"
 
 #include "logger.h"
 #include "renderer.h"
@@ -35,11 +32,15 @@ SDL_GLContext InitSDL() {
   #endif
 
   g_window = SDL_CreateWindow(
-      "TessWar", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+      "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL);
   CHECK_SDL_ERROR_PTR(g_window);
   
   auto context = SDL_GL_CreateContext(g_window);
+
+  if (glewInit() != GLEW_OK) {
+    throw std::runtime_error("Failed to initialize glew");
+  }
   
   CHECK_SDL_ERROR_PTR(context);
   
@@ -54,6 +55,7 @@ SDL_GLContext InitSDL() {
   LOG_INFO("Vendor: %", glGetString(GL_VENDOR));
   LOG_INFO("Renderer: %", glGetString(GL_RENDERER));
 
+#ifdef __EMSCRIPTEN__
   if (SDL_GL_ExtensionSupported("WEBGL_debug_renderer_info")) {
     const std::string unmasked_vendor = emscripten_run_script_string(
         "var gl = document.createElement('canvas').getContext('webgl');"
@@ -68,6 +70,7 @@ SDL_GLContext InitSDL() {
     LOG_INFO("Hardware Vendor: %", unmasked_vendor);
     LOG_INFO("Hardware Renderer: %", unmasked_renderer);
   }
+#endif
 
   LOG_INFO("Version: %", glGetString(GL_VERSION));
   LOG_INFO("Shading language version: %",
@@ -115,7 +118,7 @@ void emscripten_main_loop() {
 }
 
 int main(int /*argc*/, char** /*argv*/) {
-  logger.LogToStdOutLevel(Logger::INFO);
+  logger.LogToStdOutLevel(Logger::eLevel::INFO);
   SDL_GLContext context = InitSDL();
 
   #ifdef __EMSCRIPTEN__

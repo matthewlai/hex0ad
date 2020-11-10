@@ -7,9 +7,6 @@
 
 #include "glm/mat4x4.hpp"
 
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_opengles2.h>
-
 #include "shaders.h"
 
 class Renderer {

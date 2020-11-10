@@ -1,12 +1,12 @@
 #ifndef SHADERS_H
 #define SHADERS_H
 
-#include <GLES3/gl3.h>
-
 #include <stdexcept>
 #include <string>
 
 #include "logger.h"
+
+#include "platform_includes.h"
 
 class ShaderProgram {
  public:

@@ -1,0 +1,12 @@
+# Windows build files
+glm/out/*
+vs_proj/*.filters
+*.tlog
+*.exe
+*.lastbuildstate
+*.pdb
+*.obj
+vs_proj/x64/Debug/*
+vs_proj/x64/Release/*
+vs_proj/Debug/*
+vs_proj/.vs/*

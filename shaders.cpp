@@ -5,10 +5,12 @@
 
 #include "logger.h"
 
+#include "platform_includes.h"
+
 namespace {
 struct ShaderCompileResult {
-  GLuint shader;
-  bool success;
+  GLuint shader = 0;
+  bool success = false;
   std::string log;
 };
 

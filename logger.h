@@ -34,18 +34,23 @@
 #include <cstdint>
 
 // convenience macros
-#define LOG_DEBUG(...) logger.Log(Logger::DEBUG, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
-#define LOG_INFO(...) logger.Log(Logger::INFO, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
-#define LOG_WARN(...) logger.Log(Logger::WARN, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
-#define LOG_ERROR(...) logger.Log(Logger::ERROR, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
-#define LOG_FATAL(...) logger.Log(Logger::FATAL, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
+#define LOG_DEBUG(...) logger.Log(Logger::eLevel::DEBUG, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
+#define LOG_INFO(...) logger.Log(Logger::eLevel::INFO, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
+#define LOG_WARN(...) logger.Log(Logger::eLevel::WARN, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
+#define LOG_ERROR(...) logger.Log(Logger::eLevel::ERROR, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
+#define LOG_FATAL(...) logger.Log(Logger::eLevel::FATAL, __FILE__ ":" LOGGER_STR(__LINE__) ": " __VA_ARGS__)
 
 #define LOGGER_STR1(x) #x
 #define LOGGER_STR(x) LOGGER_STR1(x)
 
+#ifdef _MSC_VER
+#pragma warning(push)
+#pragma warning(disable:26110)
+#endif
+
 namespace Logger
 {
-	enum eLevel
+	enum class eLevel
 	{
 		DEBUG = 0,
 		INFO = 1,
@@ -68,14 +73,20 @@ namespace Logger
 	{
 	public:
 		/// default constructed RateLimiter is no-op
-		RateLimiter() : m_disabled(true) {}
+		RateLimiter() :
+			m_limitPeriod(),
+			m_tokenRate(0.0f),
+			m_numTicksPerPeriod(0),
+			m_tokens(0.0f),
+			m_disabled(true)
+		{}
 	
 		/// Tick() will block to limit firing rate to num per t milliseconds
 		RateLimiter(std::chrono::milliseconds t, uint32_t num) :
 			m_tokenRate(static_cast<float>(num) / t.count()), 
 			m_limitPeriod(t), 
 			m_numTicksPerPeriod(num), 
-			m_tokens(num), 
+			m_tokens(static_cast<float>(num)), 
 			m_disabled(false) 
 			{}
 		
@@ -107,7 +118,7 @@ namespace Logger
 		
 		if (m_tokens > m_numTicksPerPeriod)
 		{
-			m_tokens = m_numTicksPerPeriod;
+			m_tokens = static_cast<float>(m_numTicksPerPeriod);
 		}
 		
 		bool blocked = false;
@@ -132,7 +143,7 @@ namespace Logger
 	{
 	public:
 	
-		Logger(std::string prefix = "") : m_stdErrLevel(WARN), m_stdOutLevel(DISABLE), m_prefix(prefix) {}
+		Logger(std::string prefix = "") : m_stdErrLevel(eLevel::WARN), m_stdOutLevel(eLevel::DISABLE), m_prefix(prefix) {}
 		
 		/// Sets log file for one log level. All log messages at or above the log level
 		/// will be appended to the file. 
@@ -180,7 +191,7 @@ namespace Logger
 		std::string GenerateMessage_(std::string format);
 		
 		bool ShouldLog_(eLevel message_level, eLevel target_level) 
-			{ return target_level != DISABLE && target_level <= message_level; }
+			{ return target_level != eLevel::DISABLE && target_level <= message_level; }
 		
 		// this is a hacky way to avoid having to put them in their own cpp file
 		static std::mutex& GetStdOutMutex_() { static std::mutex std_out_mutex; return std_out_mutex; }
@@ -292,19 +303,19 @@ namespace Logger
 		
 		switch (level)
 		{
-		case DEBUG:
+		case eLevel::DEBUG:
 			ret.append("[D]");
 			break;
-		case INFO:
+		case eLevel::INFO:
 			ret.append("[I]");
 			break;
-		case WARN:
+		case eLevel::WARN:
 			ret.append("[W]");
 			break;
-		case ERROR:
+		case eLevel::ERROR:
 			ret.append("[E]");
 			break;
-		case FATAL:
+		case eLevel::FATAL:
 			ret.append("[F]");
 			break;
 		default:
@@ -394,15 +405,15 @@ namespace Logger
 	{
 		switch (level)
 		{
-		case DEBUG:
+		case eLevel::DEBUG:
 			return "DEBUG";
-		case INFO:
+		case eLevel::INFO:
 			return "INFO";
-		case WARN:
+		case eLevel::WARN:
 			return "WARN";
-		case ERROR:
+		case eLevel::ERROR:
 			return "ERROR";
-		case FATAL:
+		case eLevel::FATAL:
 			return "FATAL";
 		default:
 			return "UNKNOWN_LOG_LEVEL";
@@ -412,5 +423,8 @@ namespace Logger
 
 extern Logger::Logger logger;
 
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 #endif // __LOGGER_H__
 
