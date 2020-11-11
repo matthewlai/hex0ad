@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -107,7 +108,9 @@ bool main_loop() {
     }
   }
 
-  g_renderer->Render();
+  static TestTriangleRenderable tri_renderable;
+
+  g_renderer->Render(&tri_renderable);
   SDL_GL_SwapWindow(g_window);
   return quit;
 }
