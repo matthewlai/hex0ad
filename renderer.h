@@ -21,7 +21,7 @@ class TestTriangleRenderable : public Renderable {
   void Render(uint64_t frame_counter, const glm::mat4& vp) override;
 
  private:
-  std::unique_ptr<ShaderProgram> simple_shader_;
+  ShaderProgram* simple_shader_;
   GLint simple_shader_mvp_loc_;
   GLuint vertices_vbo_id_;
   GLuint indices_vbo_id_;

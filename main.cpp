@@ -10,6 +10,7 @@
 
 #include "platform_includes.h"
 
+#include "actor.h"
 #include "logger.h"
 #include "renderer.h"
 #include "utils.h"
@@ -18,8 +19,11 @@ namespace {
 const static int kScreenWidth = 800;
 const static int kScreenHeight = 600;
 
-SDL_Window* g_window;
-std::unique_ptr<Renderer> g_renderer;
+struct ProgramState {
+  SDL_Window* window;
+  std::unique_ptr<Renderer> renderer;
+  std::vector<Actor> actors;
+} g_state;
 
 SDL_GLContext InitSDL() {
   CHECK_SDL_ERROR(SDL_Init(SDL_INIT_VIDEO));
@@ -32,12 +36,12 @@ SDL_GLContext InitSDL() {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
   #endif
 
-  g_window = SDL_CreateWindow(
+  g_state.window = SDL_CreateWindow(
       "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL);
-  CHECK_SDL_ERROR_PTR(g_window);
+  CHECK_SDL_ERROR_PTR(g_state.window);
   
-  auto context = SDL_GL_CreateContext(g_window);
+  auto context = SDL_GL_CreateContext(g_state.window);
 
   if (glewInit() != GLEW_OK) {
     throw std::runtime_error("Failed to initialize glew");
@@ -84,12 +88,6 @@ SDL_GLContext InitSDL() {
   return context;
 }
 
-void DeInitSDL() {
-  SDL_DestroyWindow(g_window);
-  g_window = nullptr;
-  SDL_Quit();
-}
-
 bool main_loop() {
   SDL_Event e;
   bool quit = false;
@@ -110,13 +108,19 @@ bool main_loop() {
 
   static TestTriangleRenderable tri_renderable;
 
-  g_renderer->Render(&tri_renderable);
-  SDL_GL_SwapWindow(g_window);
+  g_state.renderer->Render(&tri_renderable);
+  SDL_GL_SwapWindow(g_state.window);
   return quit;
 }
 
 void emscripten_main_loop() {
   main_loop();
+}
+
+void DeInitSDL() {
+  SDL_DestroyWindow(g_state.window);
+  g_state.window = nullptr;
+  SDL_Quit();
 }
 }
 
@@ -129,7 +133,11 @@ int main(int /*argc*/, char** /*argv*/) {
            emscripten_run_script_string("navigator.userAgent"));
   #endif
 
-  g_renderer = std::make_unique<Renderer>();
+  g_state.renderer = std::make_unique<Renderer>();
+
+  ActorTemplate fortress("structures/britons/fortress.xml");
+
+  g_state.actors.push_back(fortress.MakeActor());
 
   #ifdef __EMSCRIPTEN__
   emscripten_set_main_loop(emscripten_main_loop, 0, 1);

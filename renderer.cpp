@@ -20,8 +20,7 @@ TestTriangleRenderable::TestTriangleRenderable() {
     2, 1, 0
   };
 
-  simple_shader_ = std::make_unique<ShaderProgram>("shaders/simple.vs",
-    "shaders/simple.fs");
+  simple_shader_ = GetShader("shaders/simple.vs", "shaders/simple.fs");
   simple_shader_mvp_loc_ = simple_shader_->GetUniformLocation("mvp");
   glGenBuffers(1, &vertices_vbo_id_);
   glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);
@@ -34,6 +33,7 @@ TestTriangleRenderable::TestTriangleRenderable() {
 
 TestTriangleRenderable::~TestTriangleRenderable() {
   glDeleteBuffers(1, &vertices_vbo_id_);
+  glDeleteBuffers(1, &indices_vbo_id_);
 }
 
 void TestTriangleRenderable::Render(uint64_t frame_counter, const glm::mat4& vp) {

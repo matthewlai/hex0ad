@@ -26,5 +26,11 @@ class ShaderProgram {
   GLuint program_;
 };
 
+// Get a pointer to a ShaderProgram built from the specified
+// sources. Reuses existing programs if already exists.
+ShaderProgram* GetShader(
+  const std::string& vertex_shader_file_name,
+  const std::string& fragment_shader_file_name);
+
 #endif // SHADERS_H
 

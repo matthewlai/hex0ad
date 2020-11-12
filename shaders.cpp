@@ -1,6 +1,7 @@
 #include "shaders.h"
 
 #include <fstream>
+#include <map>
 #include <string>
 
 #include "logger.h"
@@ -173,3 +174,19 @@ ShaderProgram::~ShaderProgram() {
   }
 }
 
+ShaderProgram* GetShader(
+  const std::string& vertex_shader_file_name,
+  const std::string& fragment_shader_file_name) {
+  std::string lookup_key =
+    vertex_shader_file_name + ";" + fragment_shader_file_name;
+  static std::map<std::string, ShaderProgram*> shader_cache;
+  auto it = shader_cache.find(lookup_key);
+  if (it != shader_cache.end()) {
+    return it->second;
+  } else {
+    ShaderProgram* program = new ShaderProgram(vertex_shader_file_name,
+                                               fragment_shader_file_name);
+    auto insert_result = shader_cache.insert(std::make_pair(lookup_key, program));
+    return insert_result.first->second;
+  }
+}
