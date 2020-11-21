@@ -7,6 +7,10 @@ vs_proj/*.filters
 *.obj
 *.o
 *.d
+hex0ad.html
+hex0ad.data
+hex0ad.js
+hex0ad.wasm
 vs_proj/x64/Debug/*
 vs_proj/x64/Release/*
 vs_proj/Debug/*

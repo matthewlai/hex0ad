@@ -153,22 +153,22 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\actor.cpp" />
-    <ClCompile Include="..\logger.cpp" />
-    <ClCompile Include="..\main.cpp" />
-    <ClCompile Include="..\renderer.cpp" />
-    <ClCompile Include="..\shaders.cpp" />
-    <ClCompile Include="..\third_party\tinyxml2\tinyxml2.cpp" />
-    <ClCompile Include="..\utils.cpp" />
+    <ClCompile Include="..\src\actor.cpp" />
+    <ClCompile Include="..\src\logger.cpp" />
+    <ClCompile Include="..\src\main.cpp" />
+    <ClCompile Include="..\src\renderer.cpp" />
+    <ClCompile Include="..\src\shaders.cpp" />
+    <ClCompile Include="..\src\third_party\tinyxml2\tinyxml2.cpp" />
+    <ClCompile Include="..\src\utils.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\actor.h" />
-    <ClInclude Include="..\logger.h" />
-    <ClInclude Include="..\platform_includes.h" />
-    <ClInclude Include="..\renderer.h" />
-    <ClInclude Include="..\shaders.h" />
-    <ClInclude Include="..\third_party\tinyxml2\tinyxml2.h" />
-    <ClInclude Include="..\utils.h" />
+    <ClInclude Include="..\inc\actor.h" />
+    <ClInclude Include="..\inc\logger.h" />
+    <ClInclude Include="..\inc\platform_includes.h" />
+    <ClInclude Include="..\inc\renderer.h" />
+    <ClInclude Include="..\inc\shaders.h" />
+    <ClInclude Include="..\inc\third_party\tinyxml2\tinyxml2.h" />
+    <ClInclude Include="..\inc\utils.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\shaders\simple.fs" />

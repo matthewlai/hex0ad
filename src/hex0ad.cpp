@@ -72,12 +72,12 @@ SDL_GLContext InitSDL() {
 #ifdef __EMSCRIPTEN__
   if (SDL_GL_ExtensionSupported("WEBGL_debug_renderer_info")) {
     const std::string unmasked_vendor = emscripten_run_script_string(
-        "var gl = document.createElement('canvas').getContext('webgl');"
+        "var gl = document.createElement('canvas').getContext('webgl2');"
         "var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');"
         "gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);");
 
     const std::string unmasked_renderer = emscripten_run_script_string(
-        "var gl = document.createElement('canvas').getContext('webgl');"
+        "var gl = document.createElement('canvas').getContext('webgl2');"
         "var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');"
         "gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);");
 
@@ -122,6 +122,8 @@ bool main_loop() {
   return quit;
 }
 
+void empty_loop() {}
+
 void emscripten_main_loop() {
   main_loop();
 }
@@ -135,6 +137,17 @@ void DeInitSDL() {
 
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
+
+  #ifdef __EMSCRIPTEN__
+  int have_webgl2 = emscripten_run_script_int(R""(
+    try { gl = canvas.getContext("webgl2"); } catch (x) { gl = null; } gl != null;)"");
+  if (!have_webgl2) {
+    LOG_ERROR("WebGL 2 not supported by your browser.");
+    LOG_ERROR("See https://caniuse.com/webgl2 for supported browser versions.");
+    emscripten_set_main_loop(empty_loop, 0, 1);
+  }
+  #endif
+
   SDL_GLContext context = InitSDL();
   (void) context;
 

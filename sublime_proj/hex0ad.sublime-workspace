@@ -1,0 +1,602 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"agge",
+				"aggregation_function"
+			],
+			[
+				"kChannel",
+				"kChannel"
+			],
+			[
+				"kNum",
+				"kNumChannels"
+			],
+			[
+				"k",
+				"kTempVbatt"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"file": "Makefile",
+			"settings":
+			{
+				"buffer_size": 1554,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "vs_proj/hex0ad.vcxproj",
+			"settings":
+			{
+				"buffer_size": 9681,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"file": "hex0ad.sublime-project",
+			"settings":
+			{
+				"buffer_size": 46,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "#ifndef PLATFORM_INCLUDES_H\n#define PLATFORM_INCLUDES_H\n\n#if defined(_WIN32)\n#define HAVE_GLEW\n#include \"GL/glew.h\"\n#endif\n\n#include <SDL.h>\n\n// OSX doesn't support OpenGL ES. We use OpenGL ES on all other\n// platforms.\n#if defined(__APPLE__) && defined(__MACH__)\n#define GL_GLEXT_PROTOTYPES\n#include <SDL_opengl.h>\n#include <SDL_opengl_glext.h>\n#else\n#include <SDL_opengles2.h>\n#endif\n\n// We target OpenGL 4.1 on Mac because ES is not supported.\n#if defined(__APPLE__) && defined(__MACH__)\n#define USE_OPENGL\n#endif\n\n#endif // PLATFORM_INCLUDES_H",
+			"file": "platform_includes.h",
+			"file_size": 572,
+			"file_write_time": 132504403462565313,
+			"settings":
+			{
+				"buffer_size": 547,
+				"encoding": "UTF-8",
+				"line_ending": "Windows"
+			}
+		},
+		{
+			"contents": "#ifndef __LOGGER_H__\n#define __LOGGER_H__\n\n/*\n * Copyright 2013 Matthew Lai\n *\n * Licensed under the Apache License, Version 2.0 (the \"License\");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\n\n#include <chrono>\n#include <fstream>\n#include <iomanip>\n#include <iostream>\n#include <map>\n#include <mutex>\n#include <queue>\n#include <set>\n#include <sstream>\n#include <stdexcept>\n#include <string>\n#include <thread>\n\n#include <ctime>\n#include <cstdint>\n\n// convenience macros\n#define LOG_DEBUG(...) logger.Log(Logger::eLevel::DEBUG, __FILE__ \":\" LOGGER_STR(__LINE__) \": \" __VA_ARGS__)\n#define LOG_INFO(...) logger.Log(Logger::eLevel::INFO, __FILE__ \":\" LOGGER_STR(__LINE__) \": \" __VA_ARGS__)\n#define LOG_WARN(...) logger.Log(Logger::eLevel::WARN, __FILE__ \":\" LOGGER_STR(__LINE__) \": \" __VA_ARGS__)\n#define LOG_ERROR(...) logger.Log(Logger::eLevel::ERROR, __FILE__ \":\" LOGGER_STR(__LINE__) \": \" __VA_ARGS__)\n#define LOG_FATAL(...) logger.Log(Logger::eLevel::FATAL, __FILE__ \":\" LOGGER_STR(__LINE__) \": \" __VA_ARGS__)\n\n#define LOGGER_STR1(x) #x\n#define LOGGER_STR(x) LOGGER_STR1(x)\n\n#ifdef _MSC_VER\n#pragma warning(push)\n#pragma warning(disable:26110)\n#endif\n\nnamespace Logger\n{\n\tenum class eLevel\n\t{\n\t\tDEBUG = 0,\n\t\tINFO = 1,\n\t\tWARN = 2,\n\t\tERROR = 3,\n\t\tFATAL = 4,\n\t\tNUM_LOG_LEVELS,\n\t\t\n\t\t/* special values */\n\t\tDISABLE\n\t};\n\t\n\tclass ILogDestination\n\t{\n\tpublic:\n\t\tvirtual void Log(eLevel level, std::string message) = 0;\n\t};\n\t\n\tclass RateLimiter\n\t{\n\tpublic:\n\t\t/// default constructed RateLimiter is no-op\n\t\tRateLimiter() :\n\t\t\tm_tokenRate(0.0f),\n\t\t\tm_numTicksPerPeriod(0),\n\t\t\tm_tokens(0.0f),\n\t\t\tm_disabled(true)\n\t\t{}\n\t\n\t\t/// Tick() will block to limit firing rate to num per t milliseconds\n\t\tRateLimiter(std::chrono::milliseconds t, uint32_t num) :\n\t\t\tm_tokenRate(static_cast<float>(num) / t.count()), \n\t\t\tm_numTicksPerPeriod(num), \n\t\t\tm_tokens(static_cast<float>(num)), \n\t\t\tm_disabled(false) \n\t\t\t{}\n\t\t\n\t\t/// returns whether Tick() blocked (exceeding rate limit)\n\t\tbool Tick();\n\tprivate:\n\t\tfloat m_tokenRate; // how many tokens per millisecond\n\t\tstd::chrono::system_clock::time_point m_lastTick;\n\t\tuint32_t m_numTicksPerPeriod;\n\t\tfloat m_tokens;\n\t\tbool m_disabled;\n\t};\n\t\n\tinline bool RateLimiter::Tick()\n\t{\n\t\tif (m_disabled)\n\t\t{\n\t\t\treturn false;\n\t\t}\n\t\n\t\t// this is the token bucket algorithm\n\t\tstd::chrono::system_clock::time_point now = std::chrono::system_clock::now();\n\t\t\n\t\tstd::chrono::milliseconds time_since_last_tick = \n\t\t\tstd::chrono::duration_cast<std::chrono::milliseconds>(now - m_lastTick);\n\t\t\n\t\tm_tokens += m_tokenRate * time_since_last_tick.count();\n\t\t\n\t\tif (m_tokens > m_numTicksPerPeriod)\n\t\t{\n\t\t\tm_tokens = static_cast<float>(m_numTicksPerPeriod);\n\t\t}\n\t\t\n\t\tbool blocked = false;\n\t\t\n\t\tif (m_tokens < 1.0f)\n\t\t{\n\t\t\tblocked = true;\n\t\t\t\n\t\t\tfloat deficit = 1.0f - m_tokens;\n\t\t\t\n\t\t\tstd::this_thread::sleep_for(std::chrono::milliseconds(static_cast<uint32_t>(deficit / m_tokenRate)));\n\t\t\t\n\t\t\tm_tokens = 1.0f;\n\t\t}\n\t\t\n\t\tm_lastTick = std::chrono::system_clock::now();\n\t\tm_tokens -= 1.0f;\n\t\treturn blocked;\n\t}\n\t\t\n\tclass Logger\n\t{\n\tpublic:\n\t\n\t\tLogger(std::string prefix = \"\") : m_stdErrLevel(eLevel::WARN), m_stdOutLevel(eLevel::DISABLE), m_prefix(prefix) {}\n\t\t\n\t\t/// Sets log file for one log level. All log messages at or above the log level\n\t\t/// will be appended to the file. \n\t\t/// To have the logger automatically generate a filename based on current date and time,\n\t\t/// pass an empty filename, and specify a prefix for the automatically generated file (eg.\n\t\t/// directory). Prefix is ignored if a filename is specified.\n\t\tstd::string SetLogFile(eLevel level, std::string filename = \"\", std::string autogen_prefix = \"\");\n\t\t\n\t\t/// Closes and stops logging to the log file associated with the specified level\n\t\tvoid UnsetLogFile(eLevel level) { std::lock_guard<std::mutex> lock(m_mutex); m_logfiles.erase(level); }\n\t\t\n\t\t/// Sets the minimum log level for stderr, or disables logging to stderr\n\t\t/// default WARN\n\t\tvoid LogToStdErrLevel(eLevel level) { std::lock_guard<std::mutex> lock(m_mutex); m_stdErrLevel = level; }\n\t\t\n\t\t/// Sets the minimum log level for stdout, or disables logging to stdout\n\t\t/// default DISABLE\n\t\tvoid LogToStdOutLevel(eLevel level) { std::lock_guard<std::mutex> lock(m_mutex); m_stdOutLevel = level; }\n\t\t\n\t\t/// Log a message\n\t\ttemplate <typename... Params>\n\t\tstd::string Log(eLevel level, std::string format, Params... parameters);\n\t\t\n\t\t/// Have Logger limit message rate to num per t milliseconds\n\t\tvoid SetRateLimit(uint32_t t_ms, uint32_t num) \n\t\t\t{ SetRateLimit(std::chrono::milliseconds(t_ms), num); }\n\t\tvoid SetRateLimit(std::chrono::milliseconds t, uint32_t num) \n\t\t\t{ std::lock_guard<std::mutex> lock(m_mutex); m_rateLimiter = RateLimiter(t, num); }\n\t\t\t\n\t\tvoid RegisterDestination(std::shared_ptr<ILogDestination> dest) { m_destinations.insert(dest); }\n\t\tvoid RemoveDestination(std::shared_ptr<ILogDestination> dest) { m_destinations.erase(dest); }\n\t\t\n\t\tLogger &operator=(const Logger&) = delete;\n\t\tLogger(const Logger&) = delete;\n\n\tprivate:\n\t\tstd::string GenerateLogFilename_(eLevel level, std::string prefix = \"\");\n\t\n\t\tstd::string GenerateMessageWithPrefixSuffix_(eLevel level, std::string message);\n\t\t\n\t\ttemplate <typename T, typename... Params>\n\t\tstd::string GenerateMessage_(std::string format, T param, Params... remaining_params);\n\t\t\n\t\t// base case\n\t\tstd::string GenerateMessage_(std::string format);\n\t\t\n\t\tbool ShouldLog_(eLevel message_level, eLevel target_level) \n\t\t\t{ return target_level != eLevel::DISABLE && target_level <= message_level; }\n\t\t\n\t\t// this is a hacky way to avoid having to put them in their own cpp file\n\t\tstatic std::mutex& GetStdOutMutex_() { static std::mutex std_out_mutex; return std_out_mutex; }\n\t\tstatic std::mutex& GetStdErrMutex_() { static std::mutex std_err_mutex; return std_err_mutex; }\n\t\t\n\t\tstd::string LevelToString_(eLevel level);\n\t\n\t\tstd::map<eLevel, std::string> m_logfiles;\n\t\t\n\t\teLevel m_stdErrLevel;\n\t\teLevel m_stdOutLevel;\n\t\t\n\t\tstd::string m_prefix;\n\t\t\n\t\tRateLimiter m_rateLimiter;\n\t\t\n\t\tstd::set<std::shared_ptr<ILogDestination> > m_destinations;\n\t\t\n\t\tstd::mutex m_mutex;\n\t};\n\t\n\tinline std::string Logger::SetLogFile(eLevel level, std::string filename, std::string autogen_prefix) \n\t{\n\t\tstd::lock_guard<std::mutex> lock(m_mutex);\n\t\n\t\tif (filename == \"\")\n\t\t{\n\t\t\tfilename = GenerateLogFilename_(level, autogen_prefix);\n\t\t}\n\t\t\n\t\tm_logfiles[level] = filename;\n\t\treturn filename;\n\t}\n\t\n\ttemplate <typename... Params>\n\tinline std::string Logger::Log(eLevel level, std::string format, Params... params)\n\t{\n\t\tstd::lock_guard<std::mutex> lock(m_mutex);\n\t\t\n\t\tbool throttled = m_rateLimiter.Tick();\n\t\t\n\t\tstd::string message = GenerateMessage_(format, params...);\n\t\t\n\t\tif (throttled)\n\t\t{\n\t\t\tmessage.append(\" (throttled)\");\n\t\t}\n\t\t\n\t\tstd::string message_with_prefix_suffix = GenerateMessageWithPrefixSuffix_(level, message);\n\t\t\n\t\tif (ShouldLog_(level, m_stdErrLevel))\n\t\t{\n\t\t\tstd::lock_guard<std::mutex> lock(GetStdErrMutex_());\n\t\t\n\t\t\tstd::cerr << message_with_prefix_suffix;\n\t\t\tstd::cerr.flush();\n\t\t}\n\t\t\n\t\tif (ShouldLog_(level, m_stdOutLevel))\n\t\t{\n\t\t\tstd::lock_guard<std::mutex> lock(GetStdOutMutex_());\n\t\t\t\n\t\t\tstd::cout << message_with_prefix_suffix;\n\t\t\tstd::cout.flush();\n\t\t}\n\t\t\n\t\tfor (const auto &x : m_logfiles)\n\t\t{\n\t\t\tif (ShouldLog_(level, x.first))\n\t\t\t{\n\t\t\t\tstd::ofstream of(x.second, std::ios::app);\n\t\t\t\t\n\t\t\t\tif (of.good())\n\t\t\t\t{\t\t\t\n\t\t\t\t\tof << message_with_prefix_suffix;\n\t\t\t\t\tof.flush();\n\t\t\t\t}\n\t\t\t\t\n\t\t\t\tif (!of.good())\n\t\t\t\t{\n\t\t\t\t\t// is there a better way to deal with this?\n\t\t\t\t\tstd::cerr << \"Failed writing to log file \" << x.second << std::endl;\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\t\n\t\tfor (const auto &x : m_destinations)\n\t\t{\n\t\t\tx->Log(level, message_with_prefix_suffix);\n\t\t}\n\t\t\n\t\treturn message_with_prefix_suffix;\n\t}\n\t\n\tinline std::string Logger::GenerateLogFilename_(eLevel level, std::string prefix) \n\t{ \n\t\ttime_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());\n\t\ttm *timeinfo = localtime(&t);\n\t\t\n\t\tchar time_str[100];\n\t\tstrftime(time_str, 100, \"%Y-%m-%d_%H-%M-%S\", timeinfo);\n\t\t\n\t\treturn prefix + time_str + \"_\" + LevelToString_(level) + \".log\";\n\t}\n\t\n\tinline std::string Logger::GenerateMessageWithPrefixSuffix_(eLevel level, std::string message)\n\t{\n\t\tstd::string ret;\n\t\t\n\t\tswitch (level)\n\t\t{\n\t\tcase eLevel::DEBUG:\n\t\t\tret.append(\"[D]\");\n\t\t\tbreak;\n\t\tcase eLevel::INFO:\n\t\t\tret.append(\"[I]\");\n\t\t\tbreak;\n\t\tcase eLevel::WARN:\n\t\t\tret.append(\"[W]\");\n\t\t\tbreak;\n\t\tcase eLevel::ERROR:\n\t\t\tret.append(\"[E]\");\n\t\t\tbreak;\n\t\tcase eLevel::FATAL:\n\t\t\tret.append(\"[F]\");\n\t\t\tbreak;\n\t\tdefault:\n\t\t\tret.append(\"[U]\");\n\t\t\tbreak;\n\t\t}\n\t\t\n\t\tstd::stringstream formatted;\n\t\t\n\t\t// use strftime to get up to second, then manually add milliseconds\n\t\t// yes, this is epic ugly\n\t\t\n\t\tstd::chrono::system_clock::time_point now = std::chrono::system_clock::now();\n\t\t\n\t\ttime_t t = std::chrono::system_clock::to_time_t(now);\n\t\ttm *timeinfo = localtime(&t);\n\t\t\n\t\tchar buf[100];\n\t\tstrftime(buf, 100, \"%Y-%m-%d %X\", timeinfo);\n\t\tuint64_t ms = (now.time_since_epoch() / std::chrono::milliseconds(1)) % 1000;\n\t\t\n\t\tformatted << \"[\" << buf << \".\" << std::setw(3) << std::setfill('0') << ms << \"]\" ;\n\t\t\n\t\tret.append(formatted.str());\n\t\t\n\t\tif (m_prefix != \"\")\n\t\t{\n\t\t\tret.append(m_prefix);\n\t\t}\n\t\t\n\t\tret.append(\" \");\n\t\tret.append(message);\n\t\t\n\t\tif (ret[ret.size() - 1] != '\\n')\n\t\t{\n\t\t\tret.push_back('\\n');\n\t\t}\n\t\t\n\t\treturn ret;\n\t}\n\t\n\ttemplate <typename T, typename... Params>\n\tinline std::string Logger::GenerateMessage_(std::string format, T param, Params... remaining_params)\n\t{\n\t\tstd::string ret;\n\t\n\t\tfor (size_t i = 0; i < format.size(); ++i)\n\t\t{\n\t\t\tif (format[i] == '%')\n\t\t\t{\n\t\t\t\t// if we see a %, we throw it away, unless the next character is also %\n\t\t\t\tif(i != (format.size() - 1) && format[i+1] == '%')\n\t\t\t\t{\n\t\t\t\t\tret.push_back('%');\n\t\t\t\t\t++i; // skip the next %\n\t\t\t\t}\n\t\t\t\telse\n\t\t\t\t{\n\t\t\t\t\tstd::stringstream ss;\n\t\t\t\t\tss << param;\n\t\t\t\t\tret.append(ss.str());\n\t\t\t\t\t\n\t\t\t\t\tif (i != (format.size() - 1))\n\t\t\t\t\t{\n\t\t\t\t\t\tret.append(GenerateMessage_(format.substr(i + 1), remaining_params...));\n\t\t\t\t\t}\n\t\t\t\t\t\n\t\t\t\t\tbreak;\n\t\t\t\t}\n\t\t\t}\n\t\t\telse\n\t\t\t{\t\t\t\t\n\t\t\t\tret.push_back(format[i]);\n\t\t\t}\n\t\t}\n\t\t\n\t\treturn ret;\n\t}\n\t\n\t// base case\n\tinline std::string Logger::GenerateMessage_(std::string format)\n\t{\n\t\treturn format;\n\t}\n\t\n\tinline std::string Logger::LevelToString_(eLevel level)\n\t{\n\t\tswitch (level)\n\t\t{\n\t\tcase eLevel::DEBUG:\n\t\t\treturn \"DEBUG\";\n\t\tcase eLevel::INFO:\n\t\t\treturn \"INFO\";\n\t\tcase eLevel::WARN:\n\t\t\treturn \"WARN\";\n\t\tcase eLevel::ERROR:\n\t\t\treturn \"ERROR\";\n\t\tcase eLevel::FATAL:\n\t\t\treturn \"FATAL\";\n\t\tdefault:\n\t\t\treturn \"UNKNOWN_LOG_LEVEL\";\n\t\t}\n\t}\n}\n\nextern Logger::Logger logger;\n\n#ifdef _MSC_VER\n#pragma warning(pop)\n#endif\n#endif // __LOGGER_H__\n\n",
+			"file": "logger.h",
+			"file_size": 11024,
+			"file_write_time": 132504387509175366,
+			"settings":
+			{
+				"buffer_size": 11024,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "#include <cstdlib>\n#include <iostream>\n#include <memory>\n#include <stdexcept>\n#include <vector>\n\n#ifdef __EMSCRIPTEN__\n#include <emscripten.h>\n#endif\n\n#include \"platform_includes.h\"\n\n#include \"actor.h\"\n#include \"logger.h\"\n#include \"renderer.h\"\n#include \"utils.h\"\n\nnamespace {\nconst static int kScreenWidth = 800;\nconst static int kScreenHeight = 600;\n\nstruct ProgramState {\n  SDL_Window* window;\n  std::unique_ptr<Renderer> renderer;\n  std::vector<Actor> actors;\n} g_state;\n\nSDL_GLContext InitSDL() {\n  CHECK_SDL_ERROR(SDL_Init(SDL_INIT_VIDEO));\n  \n  // No context attributes in Emscripten. We should always get the right one on\n  // Emscripten anyways.\n  #ifndef __EMSCRIPTEN__\n  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);\n  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);\n  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);\n  #endif\n\n  // OpenGL 4.1 on Mac.\n  #if defined(__APPLE__) && defined(__MACH__)\n  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);\n  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);\n  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);\n  #endif\n\n  g_state.window = SDL_CreateWindow(\n      \"hex0ad\", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,\n      kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL);\n  CHECK_SDL_ERROR_PTR(g_state.window);\n  \n  auto context = SDL_GL_CreateContext(g_state.window);\n\n#ifdef HAVE_GLEW\n  if (glewInit() != GLEW_OK) {\n    throw std::runtime_error(\"Failed to initialize glew\");\n  }\n#endif\n  \n  CHECK_SDL_ERROR_PTR(context);\n  \n  const auto* version = glGetString(GL_VERSION);\n  \n  if (!version) {\n    LOG_ERROR(\"Failed to create OpenGL ES 3.0 context.\");\n    throw std::runtime_error(\"Failed to create OpenGL ES 3.0 context.\");\n  }\n  \n  LOG_INFO(\"OpenGL ES Platform info:\");\n  LOG_INFO(\"Vendor: %\", glGetString(GL_VENDOR));\n  LOG_INFO(\"Renderer: %\", glGetString(GL_RENDERER));\n\n#ifdef __EMSCRIPTEN__\n  if (SDL_GL_ExtensionSupported(\"WEBGL_debug_renderer_info\")) {\n    const std::string unmasked_vendor = emscripten_run_script_string(\n        \"var gl = document.createElement('canvas').getContext('webgl');\"\n        \"var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');\"\n        \"gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL);\");\n\n    const std::string unmasked_renderer = emscripten_run_script_string(\n        \"var gl = document.createElement('canvas').getContext('webgl');\"\n        \"var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');\"\n        \"gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);\");\n\n    LOG_INFO(\"Hardware Vendor: %\", unmasked_vendor);\n    LOG_INFO(\"Hardware Renderer: %\", unmasked_renderer);\n  }\n#endif\n\n  LOG_INFO(\"Version: %\", glGetString(GL_VERSION));\n  LOG_INFO(\"Shading language version: %\",\n           glGetString(GL_SHADING_LANGUAGE_VERSION));\n           \n  if (SDL_GL_SetSwapInterval(1) < 0) {\n\t\tLOG_WARN(\"Failed to enable vsync: %\", SDL_GetError());\n\t}\n\n  return context;\n}\n\nbool main_loop() {\n  SDL_Event e;\n  bool quit = false;\n  while (SDL_PollEvent(&e) != 0) {\n    if (e.type == SDL_QUIT) {\n      quit = true;\n    } else if (e.type == SDL_KEYDOWN) {\n      switch (e.key.keysym.sym) {\n        case SDLK_ESCAPE: {\n          quit = true;\n        }\n        default: {\n          // Unknown key.\n        }\n      }\n    }\n  }\n\n  static TestTriangleRenderable tri_renderable;\n\n  g_state.renderer->Render(&tri_renderable);\n  SDL_GL_SwapWindow(g_state.window);\n  return quit;\n}\n\nvoid emscripten_main_loop() {\n  main_loop();\n}\n\nvoid DeInitSDL() {\n  SDL_DestroyWindow(g_state.window);\n  g_state.window = nullptr;\n  SDL_Quit();\n}\n}\n\nint main(int /*argc*/, char** /*argv*/) {\n  logger.LogToStdOutLevel(Logger::eLevel::INFO);\n  SDL_GLContext context = InitSDL();\n  (void) context;\n\n  #ifdef __EMSCRIPTEN__\n  LOG_INFO(\"User Agent: %\",\n           emscripten_run_script_string(\"navigator.userAgent\"));\n  #endif\n\n  g_state.renderer = std::make_unique<Renderer>();\n\n  //ActorTemplate fortress(\"structures/britons/fortress.xml\");\n\n  //g_state.actors.push_back(fortress.MakeActor());\n\n  #ifdef __EMSCRIPTEN__\n  emscripten_set_main_loop(emscripten_main_loop, 0, 1);\n  #else\n  while (!main_loop()) {}\n  #endif\n  // Anything after this is never executed in emscripten mode.\n\n  DeInitSDL();\n  \n  return 0;\n}\n",
+			"file": "main.cpp",
+			"file_size": 4274,
+			"file_write_time": 132504405031902015,
+			"settings":
+			{
+				"buffer_size": 4274,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "#include \"shaders.h\"\n\n#include <fstream>\n#include <map>\n#include <string>\n\n#include \"logger.h\"\n\n#include \"platform_includes.h\"\n\nnamespace {\nstruct ShaderCompileResult {\n  GLuint shader = 0;\n  bool success = false;\n  std::string log;\n};\n\nstd::string Replace(const std::string& s, const std::string& search,\n                    const std::string& replace) {\n  std::string::size_type pos = 0;\n  std::string ret = s;\n  while ((pos = ret.find(search, pos)) != std::string::npos) {\n    ret.replace(pos, search.size(), replace);\n    pos += replace.size();\n  }\n  return ret;\n}\n\nShaderCompileResult CompileShader(GLenum shader_type, \n                                  const std::string& source) {\n  ShaderCompileResult result;\n  result.success = false;\n\n  result.shader = glCreateShader(shader_type);\n  if (result.shader == 0) {\n    result.log = \"Failed to create shader. Invalid type?\";\n    return result;\n  }\n\n  std::string source_proc = source;\n  #ifdef USE_OPENGL\n  // GLSL ES 3.0 is based on GLSL 3.3.\n  source_proc = Replace(source_proc, \"#version 300 es\", \"#version 330\");\n  #endif\n\n  const char* source_cstr = source_proc.c_str();\n  glShaderSource(result.shader, 1, &source_cstr, nullptr);\n  glCompileShader(result.shader);\n  \n  GLint compiled;\n  glGetShaderiv(result.shader, GL_COMPILE_STATUS, &compiled);\n  \n  if (!compiled) {\n    GLint shader_log_len;\n    glGetShaderiv(result.shader, GL_INFO_LOG_LENGTH, &shader_log_len);\n    result.log.resize(shader_log_len);\n    glGetShaderInfoLog(result.shader, shader_log_len, nullptr,\n                       &result.log[0]);\n    glDeleteShader(result.shader);\n    result.shader = 0;\n    return result;\n  }\n  \n  result.success = true;\n  return result;\n}\n} // namespace\n\nShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,\n                             const std::string& fragment_shader_file_name) \n  : vertex_shader_file_name_(vertex_shader_file_name),\n    fragment_shader_file_name_(fragment_shader_file_name) {\n  std::ifstream vertex_file(vertex_shader_file_name);\n  std::ifstream fragment_file(fragment_shader_file_name);\n\n  if (!vertex_file) {\n    LOG_ERROR(\"Failed to open vertex shader file: %\", vertex_shader_file_name);\n    throw std::runtime_error(std::string(\"Failed to open vertex shader file: \")\n                             + vertex_shader_file_name);\n  }\n\n  if (!fragment_file) {\n    LOG_ERROR(\"Failed to open fragment shader file: %\",\n              fragment_shader_file_name);\n    throw std::runtime_error(\n        std::string(\"Failed to open fragment shader file: \") +\n        vertex_shader_file_name);\n  }\n\n  std::string vertex_shader_source;\n  std::string fragment_shader_source;\n\n  std::string line;\n  while (std::getline(vertex_file, line)) {\n    vertex_shader_source = vertex_shader_source + line + \"\\n\";\n  }\n\n  while (std::getline(fragment_file, line)) {\n    fragment_shader_source = fragment_shader_source + line + \"\\n\";\n  }\n\n  program_ = glCreateProgram();\n  if (program_ == 0) {\n    LOG_ERROR(\"Failed to create program object.\");\n    throw std::runtime_error(\"Failed to create program object.\");\n  }\n\n  LOG_INFO(\"Compiling % (vertex shader)\", vertex_shader_file_name);\n  auto compile_result = CompileShader(GL_VERTEX_SHADER,\n                                      vertex_shader_source);\n  if (compile_result.success) {\n    LOG_INFO(\"Success!\");\n    glAttachShader(program_, compile_result.shader);\n    vertex_shader_ = compile_result.shader;\n  } else {\n    LOG_ERROR(\"Compilation failed: %\", compile_result.log);\n    throw std::runtime_error(\n        std::string(\"Shader compilation failed: \") + compile_result.log);\n  }\n\n  LOG_INFO(\"Compiling % (fragment shader)\", fragment_shader_file_name);\n  compile_result = CompileShader(GL_FRAGMENT_SHADER, fragment_shader_source);\n\n  if (compile_result.success) {\n    LOG_INFO(\"Success!\");\n    glAttachShader(program_, compile_result.shader);\n    fragment_shader_ = compile_result.shader;\n  } else {\n    LOG_ERROR(\"Compilation failed: %\", compile_result.log);\n    throw std::runtime_error(\n        std::string(\"Shader compilation failed: \") + compile_result.log);\n  }\n\n  glLinkProgram(program_);\n  GLint linked;\n  glGetProgramiv(program_, GL_LINK_STATUS, &linked);\n  if (!linked) {\n    GLint log_length;\n    glGetProgramiv(program_, GL_INFO_LOG_LENGTH, &log_length);\n\n    if (log_length > 1) {\n      std::string link_log(log_length, '\\0');\n      glGetProgramInfoLog(program_, log_length, nullptr, &link_log[0]);\n      LOG_ERROR(\"Shader program linking failed: %\", link_log);\n      throw std::runtime_error(\n          std::string(\"Shader program linking failed: \") + link_log);\n    }\n  }\n}\n\nGLint ShaderProgram::GetUniformLocation(const std::string& name) {\n  auto loc = glGetUniformLocation(program_, name.c_str());\n\n  if (loc == -1) {\n    LOG_ERROR(\"% is not an active uniform in (%, %)\", name,\n              vertex_shader_file_name_, fragment_shader_file_name_);\n    throw std::runtime_error(\"GetUniformLocation failed.\");\n  }\n\n  if (loc == GL_INVALID_VALUE) {\n    LOG_ERROR(\"Invalid shader program (%, %)\",\n              vertex_shader_file_name_, fragment_shader_file_name_);\n    throw std::runtime_error(\"GetUniformLocation failed.\");\n  }\n\n  if (loc == GL_INVALID_OPERATION) {\n    LOG_ERROR(\"Shader program has not been successfully linked (%, %)\",\n              vertex_shader_file_name_, fragment_shader_file_name_);\n    throw std::runtime_error(\"GetUniformLocation failed.\");\n  }\n\n  return loc;\n}\n\nShaderProgram::~ShaderProgram() {\n  if (program_ != 0) {\n    if (vertex_shader_ != 0) {\n      glDetachShader(program_, vertex_shader_);\n      glDeleteShader(vertex_shader_);\n      vertex_shader_ = 0;\n    }\n\n    if (fragment_shader_ != 0) {\n      glDetachShader(program_, fragment_shader_);\n      glDeleteShader(fragment_shader_);\n      fragment_shader_ = 0;\n    }\n\n    glDeleteProgram(program_);\n    program_ = 0;\n  }\n}\n\nShaderProgram* GetShader(\n  const std::string& vertex_shader_file_name,\n  const std::string& fragment_shader_file_name) {\n  std::string lookup_key =\n    vertex_shader_file_name + \";\" + fragment_shader_file_name;\n  static std::map<std::string, ShaderProgram*> shader_cache;\n  auto it = shader_cache.find(lookup_key);\n  if (it != shader_cache.end()) {\n    return it->second;\n  } else {\n    ShaderProgram* program = new ShaderProgram(vertex_shader_file_name,\n                                               fragment_shader_file_name);\n    auto insert_result = shader_cache.insert(std::make_pair(lookup_key, program));\n    return insert_result.first->second;\n  }\n}",
+			"file": "shaders.cpp",
+			"file_size": 6511,
+			"file_write_time": 132504413706399396,
+			"settings":
+			{
+				"buffer_size": 6511,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"contents": "#include \"renderer.h\"\n\n#include \"glm/glm.hpp\"\n#include \"glm/gtc/type_ptr.hpp\"\n\n#define GLM_ENABLE_EXPERIMENTAL\n#include \"glm/gtx/string_cast.hpp\"\n\n#include \"platform_includes.h\"\n\n#include <cstddef>\n#include <iostream>\n\nTestTriangleRenderable::TestTriangleRenderable() {\n  const static GLfloat vertices[] = { 0.0f, 1.0f, 0.0f,\n                                      0.0f, 0.0f, 1.0f,\n                                      0.0f,  -1.0f, 0.0f, };\n  const static GLuint indices[] = {\n    0, 1, 2,\n    2, 1, 0\n  };\n\n  simple_shader_ = GetShader(\"shaders/simple.vs\", \"shaders/simple.fs\");\n  simple_shader_mvp_loc_ = simple_shader_->GetUniformLocation(\"mvp\");\n  glGenBuffers(1, &vertices_vbo_id_);\n  glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);\n  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 3 * 3, vertices, GL_STATIC_DRAW);\n\n  glGenBuffers(1, &indices_vbo_id_);\n  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);\n  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * 3 * 2, indices, GL_STATIC_DRAW);\n}\n\nTestTriangleRenderable::~TestTriangleRenderable() {\n  glDeleteBuffers(1, &vertices_vbo_id_);\n  glDeleteBuffers(1, &indices_vbo_id_);\n}\n\nvoid TestTriangleRenderable::Render(uint64_t frame_counter, const glm::mat4& vp) {\n  glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(float(frame_counter % 360)),\n    glm::vec3(0.0f, 1.0f, 0.0f));\n  glm::mat4 mvp = vp * model;\n  glUniformMatrix4fv(simple_shader_mvp_loc_, 1, GL_FALSE, glm::value_ptr(mvp));\n\n  simple_shader_->Activate();\n  glEnableVertexAttribArray(0);\n\n  glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);\n  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (const void*) 0);\n\n  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);\n  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (const void*)0);\n\n  glDisableVertexAttribArray(0);\n}\n\nRenderer::Renderer() {\n  frame_counter_ = 0;\n\n  // Use a single VAO for now.\n  unsigned int vao;\n  glGenVertexArrays(1, &vao);\n  glBindVertexArray(vao); \n}\n\n\n",
+			"file": "renderer.cpp",
+			"file_size": 1976,
+			"file_write_time": 132504411418243592,
+			"settings":
+			{
+				"buffer_size": 1976,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "shaders/simple.fs",
+			"settings":
+			{
+				"buffer_size": 123,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "shaders/simple.vs",
+			"settings":
+			{
+				"buffer_size": 129,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"console":
+	{
+		"height": 0.0,
+		"history":
+		[
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/Users/matthewlai/Repositories"
+	],
+	"file_history":
+	[
+		"/Users/matthewlai/jlc/JLCKicadTools/jlc_kicad_tools/jlc_lib/cpl_fix_rotations.py",
+		"/Users/matthewlai/jlc/JLCKicadTools/jlc_kicad_tools/generate_jlc_files.py",
+		"/Users/matthewlai/Downloads/info.json",
+		"/Users/matthewlai/Desktop/Runs",
+		"/Volumes/My Passport/clinicaltorments/download.sh",
+		"/Volumes/My Passport/clinicaltorments/www.clinicaltorments.com/members/videoclips.php?page=42",
+		"/Users/matthewlai/Desktop/flight_logs/airframe_info.xml",
+		"/Users/matthewlai/Repositories/WiredHut/controller/historic.py",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/include/adc.h",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/src/adc.cpp",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/include/adc_defs.h",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/include/gpio_defs.h",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/include/ostrich.h",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/src/systick.cpp",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/include/systick.h",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/src/ostrich.cpp",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/include/gpio.h",
+		"/home/matthewlai/Repositories/Ostrich/libostrich/src/gpio.cpp",
+		"/home/matthewlai/Repositories/Ostrich/example_projects/usb_serial_echo/src/board_config.cpp",
+		"/home/matthewlai/Repositories/Ostrich/example_projects/blink/src/board_config.cpp"
+	],
+	"find":
+	{
+		"height": 39.0
+	},
+	"find_in_files":
+	{
+		"height": 0.0,
+		"where_history":
+		[
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"m_limitperiod",
+			"glew"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": true,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 2,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "Makefile",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1554,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								304,
+								304
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Makefile/Makefile.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "vs_proj/hex0ad.vcxproj",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 9681,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								8557,
+								8557
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/XML/XML.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 2129.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "hex0ad.sublime-project",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 46,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								35,
+								35
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/JavaScript/JSON.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "platform_includes.h",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 547,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								516,
+								516
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "logger.h",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 11024,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1956,
+								1956
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"translate_tabs_to_spaces": false
+						},
+						"translation.x": 0.0,
+						"translation.y": 99.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 7,
+					"type": "text"
+				},
+				{
+					"buffer": 5,
+					"file": "main.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 4274,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								3359,
+								3359
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 1222.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				},
+				{
+					"buffer": 6,
+					"file": "shaders.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 6511,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								878,
+								878
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 5,
+					"type": "text"
+				},
+				{
+					"buffer": 7,
+					"file": "renderer.cpp",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 1976,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								1965,
+								1965
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/C++/C++.sublime-syntax",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 6,
+					"type": "text"
+				},
+				{
+					"buffer": 8,
+					"file": "shaders/simple.fs",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 123,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								63,
+								63
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Text/Plain text.tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 8,
+					"type": "text"
+				},
+				{
+					"buffer": 9,
+					"file": "shaders/simple.vs",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 129,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								9,
+								15
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/Text/Plain text.tmLanguage"
+						},
+						"translation.x": 0.0,
+						"translation.y": 0.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 9,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 24.0
+	},
+	"input":
+	{
+		"height": 38.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 0.0
+	},
+	"pinned_build_system": "",
+	"project": "hex0ad.sublime-project",
+	"replace":
+	{
+		"height": 44.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 226.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}

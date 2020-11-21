@@ -109,7 +109,6 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
   auto compile_result = CompileShader(GL_VERTEX_SHADER,
                                       vertex_shader_source);
   if (compile_result.success) {
-    LOG_INFO("Success!");
     glAttachShader(program_, compile_result.shader);
     vertex_shader_ = compile_result.shader;
   } else {
@@ -122,7 +121,6 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
   compile_result = CompileShader(GL_FRAGMENT_SHADER, fragment_shader_source);
 
   if (compile_result.success) {
-    LOG_INFO("Success!");
     glAttachShader(program_, compile_result.shader);
     fragment_shader_ = compile_result.shader;
   } else {

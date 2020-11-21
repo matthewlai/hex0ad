@@ -1,27 +1,12 @@
+# Build
+# Mac/Linux: make
+# Emscripten: emmake make
+# Emscripten build and run in browser: emmake make run_web
+
+# Defaults.
 ifndef CXX
 	CXX=g++
 endif
-
-CXXFLAGS_BASE = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable
-
-# we will then extend this one with optimization flags
-CXXFLAGS:= $(CXXFLAGS_BASE)
-
-CXXFLAGS_DEP = -std=gnu++17
-
-LDFLAGS=-lm
-
-CXXFILES := $(wildcard *.cpp)
-CXXFILES += third_party/tinyxml2/tinyxml2.cpp
-
-INCLUDES=-I. -Ithird_party
-
-BIN=hex0ad
-
-OBJS := $(CXXFILES:%.cpp=obj/%.o)
-DEPS := $(CXXFILES:%.cpp=dep/%.d)
-
-WEB_FILES=$(BIN).js $(BIN).wasm $(BIN).html $(BIN).data
 
 ifeq ($(V),0)
 	Q = @
@@ -29,24 +14,55 @@ else
 	Q =
 endif
 
+# Files and paths.
+# All binaries.
+BINS=bin/hex0ad
+
+WEB_BIN=hex0ad
+
+CXXFILES := $(wildcard src/*.cpp)
+CXXFILES += third_party/tinyxml2/tinyxml2.cpp
+
+WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
+
+OBJS := $(CXXFILES:%.cpp=obj/%.o) 
+DEPS := $(CXXFILES:%.cpp=dep/%.d)
+BIN_OBJS = $(BINS:bin/%=obj/src/%.o)
+
+INCLUDES=-Iinc -Ithird_party
+
+# Platforms.
 UNAME_S := $(shell uname -s)
 
-# SDL dependencies.
-CXXFLAGS += $(shell sdl2-config --cflags)
-LDFLAGS += $(shell sdl2-config --libs)
+DEFAULT_TARGETS = $(BINS)
 
-CXXFLAGS_DEP += $(shell sdl2-config --cflags)
-
-# OpenGL dependencies.
-ifeq ($(UNAME_S),Darwin)
-	LDFLAGS += -framework OpenGL
+# Flags.
+ifeq ($(notdir $(CXX)), em++)
+	CXXFLAGS = $(INCLUDES) -std=gnu++17 -s USE_SDL=2
+	LDFLAGS = --emrun -s WASM=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]'
+	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
+	LDFLAGS += --preload-file assets --preload-file shaders
+	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	LDFLAGS += -lGL
+	CXXFLAGS = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable
+	LDFLAGS = -lm
+
+	# SDL dependencies.
+	CXXFLAGS += $(shell sdl2-config --cflags)
+	CXXFLAGS_DEP = -std=gnu++17 $(shell sdl2-config --cflags)
+	LDFLAGS = $(shell sdl2-config --libs)
+
+	# OpenGL dependencies.
+	ifeq ($(UNAME_S),Darwin)
+		LDFLAGS += -framework OpenGL
+	else
+		LDFLAGS += -lGL
+	endif
 endif
 
-.PHONY: clean web
+.PHONY: clean run_web
 
-default: $(BIN)
+default: $(DEFAULT_TARGETS)
 
 dep/%.d: %.cpp
 	$(Q) $(CXX) $(CXXFLAGS_DEP) $(INCLUDES) $< -MM -MT $(@:dep/%.d=obj/%.o) > $@
@@ -54,23 +70,24 @@ dep/%.d: %.cpp
 obj/%.o: %.cpp
 	$(Q) $(CXX) $(CXXFLAGS) $(INCLUDES) -c $(@:obj/%.o=%.cpp) -o $@
 
-$(BIN): $(OBJS)
-	$(Q) $(CXX) $(CXXFLAGS) $(OBJS) -o $(BIN) $(LDFLAGS)
+$(BINS): $(OBJS)
+	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:bin/%=obj/src/%.o) -o $@ $(LDFLAGS)
 	
 clean:
-	-$(Q) rm -f $(DEPS) $(OBJS) $(BIN) $(WEB_FILES)
+	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES)
 
-web:
-	$(Q) emcc $(CXXFILES) -std=gnu++17 -O2 --emrun -s WASM=1 -s USE_SDL=2 -s \
-	    USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -s USE_WEBGL2=1 \
-	    --preload-file assets --preload-file shaders -o $(BIN).html
+$(WEB_BIN).html : $(OBJS)
+	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)
+
+run_web:
+	$(Q) emrun $(WEB_BIN).html
 
 no_deps = 
 ifeq ($(MAKECMDGOALS),clean)
 	no_deps = yes
 endif
 
-ifeq ($(MAKECMDGOALS),web)
+ifeq ($(MAKECMDGOALS),run_web)
 	no_deps = yes
 endif
 
