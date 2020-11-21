@@ -2,18 +2,19 @@ ifndef CXX
 	CXX=g++
 endif
 
-CXXFLAGS_BASE = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math
+CXXFLAGS_BASE = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable
 
 # we will then extend this one with optimization flags
 CXXFLAGS:= $(CXXFLAGS_BASE)
 
 CXXFLAGS_DEP = -std=gnu++17
 
-LDFLAGS=-lm -lSDL2 -lGL
+LDFLAGS=-lm
 
 CXXFILES := $(wildcard *.cpp)
+CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 
-INCLUDES=-I.
+INCLUDES=-I. -Ithird_party
 
 BIN=hex0ad
 
@@ -29,11 +30,18 @@ else
 endif
 
 UNAME_S := $(shell uname -s)
+
+# SDL dependencies.
+CXXFLAGS += $(shell sdl2-config --cflags)
+LDFLAGS += $(shell sdl2-config --libs)
+
+CXXFLAGS_DEP += $(shell sdl2-config --cflags)
+
+# OpenGL dependencies.
 ifeq ($(UNAME_S),Darwin)
-	# OSX needs workaround for AVX, and LTO is broken
-	# https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47785
-	CXXFLAGS += -Wa,-q
-	CXXFLAGS := $(filter-out -flto,$(CXXFLAGS))
+	LDFLAGS += -framework OpenGL
+else
+	LDFLAGS += -lGL
 endif
 
 .PHONY: clean web

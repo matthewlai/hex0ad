@@ -74,7 +74,6 @@ namespace Logger
 	public:
 		/// default constructed RateLimiter is no-op
 		RateLimiter() :
-			m_limitPeriod(),
 			m_tokenRate(0.0f),
 			m_numTicksPerPeriod(0),
 			m_tokens(0.0f),
@@ -84,7 +83,6 @@ namespace Logger
 		/// Tick() will block to limit firing rate to num per t milliseconds
 		RateLimiter(std::chrono::milliseconds t, uint32_t num) :
 			m_tokenRate(static_cast<float>(num) / t.count()), 
-			m_limitPeriod(t), 
 			m_numTicksPerPeriod(num), 
 			m_tokens(static_cast<float>(num)), 
 			m_disabled(false) 
@@ -94,7 +92,6 @@ namespace Logger
 		bool Tick();
 	private:
 		float m_tokenRate; // how many tokens per millisecond
-		std::chrono::milliseconds m_limitPeriod;
 		std::chrono::system_clock::time_point m_lastTick;
 		uint32_t m_numTicksPerPeriod;
 		float m_tokens;

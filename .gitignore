@@ -1,4 +1,3 @@
-# Windows build files
 glm/out/*
 vs_proj/*.filters
 *.tlog
@@ -6,9 +5,12 @@ vs_proj/*.filters
 *.lastbuildstate
 *.pdb
 *.obj
+*.o
+*.d
 vs_proj/x64/Debug/*
 vs_proj/x64/Release/*
 vs_proj/Debug/*
 vs_proj/.vs/*
 assets/*
 !assets/Download.txt
+hex0ad

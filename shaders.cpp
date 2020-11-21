@@ -15,6 +15,17 @@ struct ShaderCompileResult {
   std::string log;
 };
 
+std::string Replace(const std::string& s, const std::string& search,
+                    const std::string& replace) {
+  std::string::size_type pos = 0;
+  std::string ret = s;
+  while ((pos = ret.find(search, pos)) != std::string::npos) {
+    ret.replace(pos, search.size(), replace);
+    pos += replace.size();
+  }
+  return ret;
+}
+
 ShaderCompileResult CompileShader(GLenum shader_type, 
                                   const std::string& source) {
   ShaderCompileResult result;
@@ -26,7 +37,13 @@ ShaderCompileResult CompileShader(GLenum shader_type,
     return result;
   }
 
-  const char* source_cstr = source.c_str();
+  std::string source_proc = source;
+  #ifdef USE_OPENGL
+  // GLSL ES 3.0 is based on GLSL 3.3.
+  source_proc = Replace(source_proc, "#version 300 es", "#version 330");
+  #endif
+
+  const char* source_cstr = source_proc.c_str();
   glShaderSource(result.shader, 1, &source_cstr, nullptr);
   glCompileShader(result.shader);
   

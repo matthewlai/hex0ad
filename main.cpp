@@ -36,6 +36,13 @@ SDL_GLContext InitSDL() {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
   #endif
 
+  // OpenGL 4.1 on Mac.
+  #if defined(__APPLE__) && defined(__MACH__)
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+  #endif
+
   g_state.window = SDL_CreateWindow(
       "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL);
@@ -43,9 +50,11 @@ SDL_GLContext InitSDL() {
   
   auto context = SDL_GL_CreateContext(g_state.window);
 
+#ifdef HAVE_GLEW
   if (glewInit() != GLEW_OK) {
     throw std::runtime_error("Failed to initialize glew");
   }
+#endif
   
   CHECK_SDL_ERROR_PTR(context);
   
@@ -127,6 +136,7 @@ void DeInitSDL() {
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
   SDL_GLContext context = InitSDL();
+  (void) context;
 
   #ifdef __EMSCRIPTEN__
   LOG_INFO("User Agent: %",
@@ -135,9 +145,9 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.renderer = std::make_unique<Renderer>();
 
-  ActorTemplate fortress("structures/britons/fortress.xml");
+  //ActorTemplate fortress("structures/britons/fortress.xml");
 
-  g_state.actors.push_back(fortress.MakeActor());
+  //g_state.actors.push_back(fortress.MakeActor());
 
   #ifdef __EMSCRIPTEN__
   emscripten_set_main_loop(emscripten_main_loop, 0, 1);
