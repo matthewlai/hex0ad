@@ -56,6 +56,11 @@ void TestTriangleRenderable::Render(uint64_t frame_counter, const glm::mat4& vp)
 
 Renderer::Renderer() {
   frame_counter_ = 0;
+
+  #ifdef USE_OPENGL
+  // OpenGL core profile doesn't have a default VAO. Use a single VAO for now.
+  unsigned int vao;
+  glGenVertexArrays(1, &vao);
+  glBindVertexArray(vao); 
+  #endif
 }
-
-
