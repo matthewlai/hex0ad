@@ -32,8 +32,6 @@ BIN_OBJS = $(BINS:bin/%=obj/src/%.o)
 INCLUDES=-Iinc -Ithird_party
 
 # Platforms.
-UNAME_S := $(shell uname -s)
-
 DEFAULT_TARGETS = $(BINS)
 
 # Flags.
@@ -47,16 +45,23 @@ else
 	CXXFLAGS = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable
 	LDFLAGS = -lm
 
-	# SDL dependencies.
-	CXXFLAGS += $(shell sdl2-config --cflags)
-	CXXFLAGS_DEP = -std=gnu++17 $(shell sdl2-config --cflags)
-	LDFLAGS = $(shell sdl2-config --libs)
-
-	# OpenGL dependencies.
-	ifeq ($(UNAME_S),Darwin)
-		LDFLAGS += -framework OpenGL
+	ifeq ($(OS),Windows_NT)
+		LDFLAGS += -lmingw32 -lSDL2main -lSDL2
+		LDFLAGS += -lopengl32 -lglew32
 	else
-		LDFLAGS += -lGL
+		# For UNIX-like platforms.
+		# SDL dependencies.
+		CXXFLAGS += $(shell sdl2-config --cflags)
+		CXXFLAGS_DEP = -std=gnu++17 $(shell sdl2-config --cflags)
+		LDFLAGS = $(shell sdl2-config --libs)
+
+		# OpenGL dependencies.
+		UNAME_S := $(shell uname -s)
+		ifeq ($(UNAME_S),Darwin)
+			LDFLAGS += -framework OpenGL
+		else
+			LDFLAGS += -lGL
+		endif
 	endif
 endif
 
