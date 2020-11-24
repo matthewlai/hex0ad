@@ -7,6 +7,7 @@ vs_proj/*.filters
 *.obj
 *.o
 *.d
+*_generated.h
 hex0ad.html
 hex0ad.data
 hex0ad.js
@@ -15,6 +16,6 @@ vs_proj/x64/Debug/*
 vs_proj/x64/Release/*
 vs_proj/Debug/*
 vs_proj/.vs/*
-assets/*
-!assets/Download.txt
+0ad_assets/*
+!0ad_assets/Download.txt
 hex0ad

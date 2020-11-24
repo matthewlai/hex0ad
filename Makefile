@@ -16,7 +16,7 @@ endif
 
 # Files and paths.
 # All binaries.
-BINS=bin/hex0ad
+BINS=bin/hex0ad bin/make_assets
 
 WEB_BIN=hex0ad
 
@@ -25,11 +25,13 @@ CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
 
+FLATBUFFER_SCHEMAS := $(wildcard fb/*.fbs)
+
 OBJS := $(CXXFILES:%.cpp=obj/%.o) 
 DEPS := $(CXXFILES:%.cpp=dep/%.d)
 BIN_OBJS = $(BINS:bin/%=obj/src/%.o)
 
-INCLUDES=-Iinc -Ithird_party
+INCLUDES=-Iinc -Ithird_party -Ifb
 
 # Platforms.
 DEFAULT_TARGETS = $(BINS)
@@ -68,6 +70,9 @@ endif
 .PHONY: clean run_web
 
 default: $(DEFAULT_TARGETS)
+
+fb/%_generated.h: fb/%.fbs
+	$(Q) flatc --cpp -o fb/ $<
 
 dep/%.d: %.cpp
 	$(Q) $(CXX) $(CXXFLAGS_DEP) $(INCLUDES) $< -MM -MT $(@:dep/%.d=obj/%.o) > $@

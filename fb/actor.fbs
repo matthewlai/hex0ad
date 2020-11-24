@@ -1,0 +1,16 @@
+namespace data;
+
+table Variant {
+	name:string;
+	frequency:float;
+}
+
+table Group {
+	variants:[Variant];
+}
+
+table Actor {
+	groups:[Group];
+}
+
+root_type Actor;
