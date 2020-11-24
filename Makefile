@@ -46,7 +46,7 @@ else
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -lmingw32 -lSDL2main -lSDL2
+		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -mwindows
 		LDFLAGS += -lopengl32 -lglew32
 	else
 		# For UNIX-like platforms.
