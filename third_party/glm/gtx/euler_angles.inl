@@ -1,5 +1,4 @@
 /// @ref gtx_euler_angles
-/// @file glm/gtx/euler_angles.inl
 
 #include "compatibility.hpp" // glm::atan2
 
@@ -666,13 +665,13 @@ namespace glm
 		mat<3, 3, T, defaultp> Result;
 		Result[0][0] = c;
 		Result[0][1] = s;
-		Result[0][2] = 0.0f;
+		Result[0][2] = T(0.0);
 		Result[1][0] = -s;
 		Result[1][1] = c;
-		Result[1][2] = 0.0f;
-		Result[2][0] = 0.0f;
-		Result[2][1] = 0.0f;
-		Result[2][2] = 1.0f;
+		Result[1][2] = T(0.0);
+		Result[2][0] = T(0.0);
+		Result[2][1] = T(0.0);
+		Result[2][2] = T(1.0);
 		return Result;
 	}
 
@@ -700,12 +699,12 @@ namespace glm
                                             T & t2,
                                             T & t3)
     {
-        float T1 = glm::atan2<T, defaultp>(M[2][1], M[2][2]);
-        float C2 = glm::sqrt(M[0][0]*M[0][0] + M[1][0]*M[1][0]);
-        float T2 = glm::atan2<T, defaultp>(-M[2][0], C2);
-        float S1 = glm::sin(T1);
-        float C1 = glm::cos(T1);
-        float T3 = glm::atan2<T, defaultp>(S1*M[0][2] - C1*M[0][1], C1*M[1][1] - S1*M[1][2  ]);
+        T T1 = glm::atan2<T, defaultp>(M[2][1], M[2][2]);
+        T C2 = glm::sqrt(M[0][0]*M[0][0] + M[1][0]*M[1][0]);
+        T T2 = glm::atan2<T, defaultp>(-M[2][0], C2);
+        T S1 = glm::sin(T1);
+        T C1 = glm::cos(T1);
+        T T3 = glm::atan2<T, defaultp>(S1*M[0][2] - C1*M[0][1], C1*M[1][1] - S1*M[1][2  ]);
         t1 = -T1;
         t2 = -T2;
         t3 = -T3;
