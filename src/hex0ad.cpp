@@ -16,8 +16,8 @@
 #include "utils.h"
 
 namespace {
-const static int kScreenWidth = 800;
-const static int kScreenHeight = 600;
+const static int kScreenWidth = 1920;
+const static int kScreenHeight = 1080;
 
 struct ProgramState {
   SDL_Window* window;
@@ -105,19 +105,30 @@ bool main_loop() {
       quit = true;
     } else if (e.type == SDL_KEYDOWN) {
       switch (e.key.keysym.sym) {
-        case SDLK_ESCAPE: {
+        #define GraphicsSetting(upper, lower, type, default, toggle_key) \
+        case toggle_key: \
+          g_state.renderer->Toggle ## upper (); \
+          break;
+        GRAPHICS_SETTINGS
+        #undef GraphicsSetting
+        case SDLK_ESCAPE:
           quit = true;
-        }
-        default: {
+          break;
+        default:
           // Unknown key.
-        }
+          break;
       }
     }
   }
 
   static TestTriangleRenderable tri_renderable;
 
-  g_state.renderer->Render(&tri_renderable);
+  //g_state.renderer->Render(&tri_renderable);
+
+  for (auto& actor : g_state.actors) {
+    g_state.renderer->Render(&actor);
+  }
+
   SDL_GL_SwapWindow(g_state.window);
   return quit;
 }
@@ -158,9 +169,10 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.renderer = std::make_unique<Renderer>();
 
-  //ActorTemplate fortress("structures/britons/fortress.xml");
+  //ActorTemplate fortress("structures/persians/fortress.fb");
+  ActorTemplate fortress("structures/romans/fortress.fb");
 
-  //g_state.actors.push_back(fortress.MakeActor());
+  g_state.actors.push_back(fortress.MakeActor());
 
   #ifdef __EMSCRIPTEN__
   emscripten_set_main_loop(emscripten_main_loop, 0, 1);

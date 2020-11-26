@@ -1,18 +1,28 @@
 #ifndef ACTOR_H
 #define ACTOR_H
 
+#include <cstdint>
 #include <optional>
 #include <random>
 #include <string>
 #include <vector>
+
+#include "glm/glm.hpp"
+#include "glm/gtc/type_ptr.hpp"
+
+#include "renderer.h"
+
+#include "actor_generated.h"
+#include "mesh_generated.h"
 
 class ActorTemplate;
 
 // An actor is a logical instantiation of an ActorTemplate, with sampled
 // variant selections and state in world. The template must outlive any
 // actor instantiated from it.
-class Actor {
+class Actor : public Renderable {
  public:
+  void Render(RenderContext* context) override;
 
  private:
   Actor(ActorTemplate* actor_template);
@@ -23,26 +33,17 @@ class Actor {
   friend class ActorTemplate;
 };
 
-// Corresponds to an actor XML file (all groups and variants).
+// Corresponds to an actor .fbs file, which corresponds to an actor XML.
 class ActorTemplate {
  public:
-  struct Variant {
-    // Variants with frequency > 0 may be randomly selected.
-    // Variants with frequency = 0 are either disabled or selected by name.
-    float frequency = 0.0f;
-    std::string name;
-
-    // Each variant may have animations, (1x) mesh, props, and/or textures.
-    std::optional<std::string> mesh_path;
-  };
-  using Group = std::vector<Variant>;
-
   ActorTemplate(const std::string& actor_path);
 
   Actor MakeActor() { return Actor(this); }
 
-  int NumGroups() const { return static_cast<int>(groups_.size()); }
-  int NumVariants(int group) const { return static_cast<int>(groups_[group].size()); }
+  int NumGroups() const { return actor_data_->groups()->size(); }
+  int NumVariants(int group) const { return actor_data_->groups()->Get(group)->variants()->size(); }
+
+  void Render(const std::vector<int>& variant_selections, Renderable::RenderContext* context);
 
   std::mt19937& Rng() {
     if (!rng_) {
@@ -53,8 +54,9 @@ class ActorTemplate {
   }
 
  private:
-  std::vector<Group> groups_;
   std::optional<std::mt19937> rng_;
+  std::vector<uint8_t> actor_raw_buffer_;
+  const data::Actor* actor_data_;
 };
 
 #endif // ACTOR_H

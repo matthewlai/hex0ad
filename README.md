@@ -10,3 +10,6 @@ Tile-based strategy game using 0ad assets
 * SDL2 (https://www.libsdl.org/download-2.0.php)
 * GLEW (http://www.grhmedia.com/glew.html)
 * Flatc compiler (https://github.com/google/flatbuffers/releases)
+* AssImp for converting assets (https://github.com/assimp/assimp)
+	* cmake -G "MinGW Makefiles" CMakeLists.txt
+	* make

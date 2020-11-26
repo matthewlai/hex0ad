@@ -22,6 +22,7 @@ WEB_BIN=hex0ad
 
 CXXFILES := $(wildcard src/*.cpp)
 CXXFILES += third_party/tinyxml2/tinyxml2.cpp
+CXXFILES += third_party/lodepng/lodepng.cpp
 
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
 
@@ -44,11 +45,11 @@ ifeq ($(notdir $(CXX)), em++)
 	LDFLAGS += --preload-file assets --preload-file shaders
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable
+	CXXFLAGS = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -mwindows
+		LDFLAGS += -lmingw32 -lSDL2main -lSDL2
 		LDFLAGS += -lopengl32 -lglew32
 	else
 		# For UNIX-like platforms.
@@ -80,8 +81,11 @@ dep/%.d: %.cpp
 obj/%.o: %.cpp
 	$(Q) $(CXX) $(CXXFLAGS) $(INCLUDES) -c $(@:obj/%.o=%.cpp) -o $@
 
-$(BINS): $(OBJS)
-	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:bin/%=obj/src/%.o) -o $@ $(LDFLAGS)
+bin/make_assets: $(OBJS)
+	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o -o $@ $(LDFLAGS) -lassimp
+
+bin/hex0ad: $(OBJS)
+	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o -o $@ $(LDFLAGS)
 	
 clean:
 	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES)

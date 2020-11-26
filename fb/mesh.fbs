@@ -1,0 +1,41 @@
+namespace data;
+
+table Mesh {
+	path:string;
+
+	// Index (into vectors below) of each vertex of each triangle.
+	// Size nTriangles * 3.
+	vertex_indices:[uint32];
+
+	// Vertices.
+	// Size nVertices * 3.
+	vertices:[float];
+
+	// Normals.
+	// Size nVertices * 3.
+	normals:[float];
+
+  // Tangents for normal mapping (bitangent computed in shader).
+  // Size nVertices * 3.
+  tangents:[float];
+
+  // UV coords.
+  // Size nVertices * 2.
+  tex_coords:[float];
+
+  // UV coords for ambient occlusion.
+  // Size nVertices * 2.
+  ao_tex_coords:[float];
+
+  texture_types:[string];
+  texture_files:[string];
+
+  // Attachment points.
+  attachment_point_names:[string];
+
+  // Transformation matrices of each attachment point.
+  // Size nAttachmentPoints * 4 * 4.
+  attachment_point_transforms:[float];
+}
+
+root_type Mesh;

@@ -36,10 +36,10 @@ TestTriangleRenderable::~TestTriangleRenderable() {
   glDeleteBuffers(1, &indices_vbo_id_);
 }
 
-void TestTriangleRenderable::Render(uint64_t frame_counter, const glm::mat4& vp) {
-  glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(float(frame_counter % 360)),
+void TestTriangleRenderable::Render(RenderContext* context) {
+  glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(float(context->frame_counter % 360)),
     glm::vec3(0.0f, 1.0f, 0.0f));
-  glm::mat4 mvp = vp * model;
+  glm::mat4 mvp = context->vp * model;
   glUniformMatrix4fv(simple_shader_mvp_loc_, 1, GL_FALSE, glm::value_ptr(mvp));
 
   simple_shader_->Activate();
@@ -55,7 +55,9 @@ void TestTriangleRenderable::Render(uint64_t frame_counter, const glm::mat4& vp)
 }
 
 Renderer::Renderer() {
-  frame_counter_ = 0;
+  #define GraphicsSetting(upper, lower, type, default, toggle_key) render_context_.lower = default;
+  GRAPHICS_SETTINGS
+  #undef GraphicsSetting
 
   #ifdef USE_OPENGL
   // OpenGL core profile doesn't have a default VAO. Use a single VAO for now.

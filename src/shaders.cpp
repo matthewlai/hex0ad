@@ -149,7 +149,8 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
 GLint ShaderProgram::GetUniformLocation(const std::string& name) {
   auto loc = glGetUniformLocation(program_, name.c_str());
 
-  if (loc == -1) {
+  constexpr bool kCheckShaderActive = false;
+  if (kCheckShaderActive && loc == -1) {
     LOG_ERROR("% is not an active uniform in (%, %)", name,
               vertex_shader_file_name_, fragment_shader_file_name_);
     throw std::runtime_error("GetUniformLocation failed.");

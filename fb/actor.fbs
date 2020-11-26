@@ -1,8 +1,18 @@
 namespace data;
 
+table Prop {
+  actor:string;
+  attachpoint:string;
+}
+
+// Variants with frequency > 0 may be randomly selected.
+// Variants with frequency = 0 are either disabled or selected by name.
+// Each variant may have animations, (1x) mesh, props, and/or textures.
 table Variant {
 	name:string;
 	frequency:float;
+	mesh_path:string;
+  props:[Prop];
 }
 
 table Group {
@@ -10,6 +20,7 @@ table Group {
 }
 
 table Actor {
+	path:string;
 	groups:[Group];
 }
 
