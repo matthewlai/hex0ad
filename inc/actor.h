@@ -23,6 +23,7 @@ class ActorTemplate;
 class Actor : public Renderable {
  public:
   void Render(RenderContext* context) override;
+  virtual ~Actor() {}
 
  private:
   Actor(ActorTemplate* actor_template);
