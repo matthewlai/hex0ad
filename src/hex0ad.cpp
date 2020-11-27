@@ -21,6 +21,7 @@ const static int kScreenHeight = 1080;
 
 struct ProgramState {
   SDL_Window* window;
+  bool fullscreen = false;
   std::unique_ptr<Renderer> renderer;
   std::vector<Actor> actors;
 } g_state;
@@ -49,7 +50,7 @@ SDL_GLContext InitSDL() {
 
   g_state.window = SDL_CreateWindow(
       "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-      kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL);
+      kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL /*| SDL_WINDOW_ALLOW_HIGHDPI*/);
   CHECK_SDL_ERROR_PTR(g_state.window);
   
   auto context = SDL_GL_CreateContext(g_state.window);
@@ -128,6 +129,13 @@ bool main_loop() {
         case SDLK_ESCAPE:
           quit = true;
           break;
+        case SDLK_f:
+          g_state.fullscreen ^= 1;
+          if (g_state.fullscreen) {
+            SDL_SetWindowFullscreen(g_state.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+          } else {
+            SDL_SetWindowFullscreen(g_state.window, 0);
+          }
         default:
           // Unknown key.
           break;
