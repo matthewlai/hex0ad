@@ -139,7 +139,6 @@ namespace Logger
 	class Logger
 	{
 	public:
-	
 		Logger(std::string prefix = "") : m_stdErrLevel(eLevel::WARN), m_stdOutLevel(eLevel::DISABLE), m_prefix(prefix) {}
 		
 		/// Sets log file for one log level. All log messages at or above the log level

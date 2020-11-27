@@ -89,10 +89,20 @@ SDL_GLContext InitSDL() {
   LOG_INFO("Version: %", glGetString(GL_VERSION));
   LOG_INFO("Shading language version: %",
            glGetString(GL_SHADING_LANGUAGE_VERSION));
-           
-  if (SDL_GL_SetSwapInterval(1) < 0) {
-		LOG_WARN("Failed to enable vsync: %", SDL_GetError());
-	}
+
+  // First try to enable adaptive vsync.
+  if (SDL_GL_SetSwapInterval(-1) == 0) {
+    LOG_INFO("Using adaptive vsync");
+  } else {
+    LOG_WARN("Failed to enable adaptive vsync: %", SDL_GetError());
+    
+    // If that didn't work, try standard vsync.
+    if (SDL_GL_SetSwapInterval(1) == 0) {
+      LOG_INFO("Using vsync");
+    } else {
+      LOG_WARN("Failed to enable vsync: %", SDL_GetError());
+    }
+  }
 
   return context;
 }
