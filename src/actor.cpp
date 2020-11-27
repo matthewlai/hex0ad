@@ -58,7 +58,6 @@ void BindTexture(const std::string& texture_name, GLenum texture_unit) {
   CHECK_GL_ERROR;
   auto it = texture_cache.find(texture_name);
   if (it == texture_cache.end()) {
-    glActiveTexture(GL_TEXTURE31);
     GLuint texture_id;
     glGenTextures(1, &texture_id);
     CHECK_GL_ERROR;
@@ -81,10 +80,14 @@ void BindTexture(const std::string& texture_name, GLenum texture_unit) {
                  0, GL_RGBA, GL_UNSIGNED_BYTE, image_data.data());
     CHECK_GL_ERROR;
 
+    // These settings apply to the active texture unit, so we don't actually need to
+    // do it for every texture loaded, but this is an easy way to ensure that we are applying
+    // them to all the texture units we use, and the performance hit is negligible.
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 10); // Our largest textures are 2^10
+
     glGenerateMipmap(GL_TEXTURE_2D);
   } else {
     glBindTexture(GL_TEXTURE_2D, it->second);
