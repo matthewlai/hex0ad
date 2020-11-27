@@ -1,6 +1,7 @@
 #ifndef UTILS_H
 #define UTILS_H
 
+#include <chrono>
 #include <cstdint>
 #include <stdexcept>
 #include <sstream>
@@ -25,5 +26,12 @@
         std::to_string(glGetError())); } } while (0);
 
 std::vector<std::uint8_t> ReadWholeFile(const std::string& path);
+
+// Get steady clock time in microseconds (for durations only).
+inline uint64_t GetTimeUs() {
+  using Clock = std::chrono::steady_clock;
+  auto now = Clock::now().time_since_epoch();
+  return std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+}
 
 #endif // UTILS_H

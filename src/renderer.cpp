@@ -59,6 +59,10 @@ Renderer::Renderer() {
   GRAPHICS_SETTINGS
   #undef GraphicsSetting
 
+  render_context_.last_frame_time_us = GetTimeUs();
+
+  last_stat_time_us_ = GetTimeUs();
+
   #ifdef USE_OPENGL
   // OpenGL core profile doesn't have a default VAO. Use a single VAO for now.
   unsigned int vao;
