@@ -76,6 +76,8 @@ void Renderer::Render(RenderableIterator begin, RenderableIterator end) {
   // All non-graphics CPU work should have been done by this point.
   glFinish();
 
+  // Unless we are falling terribly behind (code before this point taking more than
+  //  an entire frame period), this is when the buffer swap happens.
   uint64_t frame_start_time = GetTimeUs();
 
   SDL_Window* window = SDL_GL_GetCurrentWindow();
@@ -123,16 +125,16 @@ void Renderer::Render(RenderableIterator begin, RenderableIterator end) {
   uint64_t frame_end_time = GetTimeUs();
 
   ++render_context_.frame_counter;
-  if ((frame_end_time - last_stat_time_us_) > kRenderStatsPeriod) {
-    uint64_t time_since_last_frame_us = frame_end_time - render_context_.last_frame_time_us;
+  if ((frame_start_time - last_stat_time_us_) > kRenderStatsPeriod) {
+    uint64_t time_since_last_frame_us = frame_start_time - render_context_.last_frame_time_us;
     float frame_rate = 1000000.0f / time_since_last_frame_us;
     LOG_INFO("Frame rate: %, draw calls time: % us, render time: % us",
              frame_rate,
              (draw_calls_end_time - frame_start_time),
              (frame_end_time - frame_start_time));
-    last_stat_time_us_ = frame_end_time;
+    last_stat_time_us_ = frame_start_time;
   }
-  render_context_.last_frame_time_us = frame_end_time;
+  render_context_.last_frame_time_us = frame_start_time;
 }
 
 #endif // RENDERER_H
