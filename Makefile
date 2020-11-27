@@ -28,6 +28,8 @@ WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
 
 FLATBUFFER_SCHEMAS := $(wildcard fb/*.fbs)
 
+FLATBUFFER_GENERATED_FILES := $(FLATBUFFER_SCHEMAS:fb/%.fbs=fb/%_generated.h)
+
 OBJS := $(CXXFILES:%.cpp=obj/%.o) 
 DEPS := $(CXXFILES:%.cpp=dep/%.d)
 BIN_OBJS = $(BINS:bin/%=obj/src/%.o)
@@ -46,25 +48,36 @@ ifeq ($(notdir $(CXX)), em++)
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
 	CXXFLAGS = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g
-	LDFLAGS = -lm
+	LDFLAGS = -lm -lassimp
 
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -lmingw32 -lSDL2main -lSDL2
+		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -lassimp
 		LDFLAGS += -lopengl32 -lglew32
 	else
 		# For UNIX-like platforms.
+		UNAME_S := $(shell uname -s)
+
+		# Add homebrew include path for Mac
+		ifeq ($(UNAME_S),Darwin)
+			INCLUDES += -I$${HOME}/homebrew/include
+		endif
+
 		# SDL dependencies.
 		CXXFLAGS += $(shell sdl2-config --cflags)
 		CXXFLAGS_DEP = -std=gnu++17 $(shell sdl2-config --cflags)
 		LDFLAGS = $(shell sdl2-config --libs)
 
 		# OpenGL dependencies.
-		UNAME_S := $(shell uname -s)
 		ifeq ($(UNAME_S),Darwin)
 			LDFLAGS += -framework OpenGL
 		else
 			LDFLAGS += -lGL
 		endif
+
+		# Assimp dependencies.
+		# We cannot use pkg-config at least on Mac because of this bug:
+		# https://github.com/Homebrew/homebrew-core/issues/47405
+		LDFLAGS += -lassimp
 	endif
 endif
 
@@ -75,14 +88,14 @@ default: $(DEFAULT_TARGETS)
 fb/%_generated.h: fb/%.fbs
 	$(Q) flatc --cpp -o fb/ $<
 
-dep/%.d: %.cpp
+dep/%.d: %.cpp $(FLATBUFFER_GENERATED_FILES)
 	$(Q) $(CXX) $(CXXFLAGS_DEP) $(INCLUDES) $< -MM -MT $(@:dep/%.d=obj/%.o) > $@
 	
-obj/%.o: %.cpp
+obj/%.o: %.cpp $(FLATBUFFER_GENERATED_FILES)
 	$(Q) $(CXX) $(CXXFLAGS) $(INCLUDES) -c $(@:obj/%.o=%.cpp) -o $@
 
 bin/make_assets: $(OBJS)
-	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o -o $@ $(LDFLAGS) -lassimp
+	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o -o $@ $(LDFLAGS)
 
 bin/hex0ad: $(OBJS)
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o -o $@ $(LDFLAGS)
