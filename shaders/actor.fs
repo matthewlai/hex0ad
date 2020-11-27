@@ -61,7 +61,7 @@ void main() {
     vec3 ambient = kAmbientLight * mixed_colour;
 
     if (use_ao_map) {
-      vec3 ao = texture2D(ao_texture, ao_tex_coords).rrr;
+      vec3 ao = texture(ao_texture, ao_tex_coords).rrr;
       ao = mix(vec3(1.0), ao * 2.0, kAoStrength);
       ambient *= ao;
     }
