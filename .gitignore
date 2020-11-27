@@ -20,3 +20,4 @@ vs_proj/.vs/*
 0ad_assets/*
 !0ad_assets/Download.txt
 hex0ad
+make_assets
