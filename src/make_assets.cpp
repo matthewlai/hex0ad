@@ -29,10 +29,15 @@
 using tinyxml2::XMLDocument;
 using tinyxml2::XMLElement;
 using tinyxml2::XMLHandle;
+using tinyxml2::XMLNode;
 
 namespace {
 //static constexpr const char* kTestActorPath = "structures/persians/fortress.xml";
-static constexpr const char* kTestActorPath = "structures/romans/fortress.xml";
+static constexpr const char* kTestActorPaths[] = {
+    "structures/persians/stable.xml",
+    "units/athenians/hero_infantry_javelinist_iphicrates.xml"
+    };
+
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
 
 static constexpr const char* kInputPrefix = "0ad_assets/";
@@ -40,6 +45,7 @@ static constexpr const char* kOutputPrefix = "assets/";
 static constexpr const char* kActorPathPrefix = "art/actors/";
 static constexpr const char* kMeshPathPrefix = "art/meshes/";
 static constexpr const char* kTexturePathPrefix = "art/textures/skins/";
+static constexpr const char* kVariantPathPrefix = "art/variants/";
 
 std::vector<XMLHandle> GetAllChildrenElements(XMLHandle root, const std::string& elem) {
   std::vector<XMLHandle> ret;
@@ -86,6 +92,46 @@ void WriteToFile(const std::string& path, uint8_t* buf, std::size_t size) {
       std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
   of.write(reinterpret_cast<const char*>(buf), size);
 }
+
+XMLNode* DeepCopy(XMLNode* node, XMLDocument* doc) {
+    XMLNode* ret = node->ShallowClone(doc);
+    for (XMLElement* child = node->FirstChildElement(); child != nullptr; child = child->NextSiblingElement()) {
+      ret->InsertEndChild(DeepCopy(child, doc));
+    }
+
+    return ret;
+}
+
+// Variants can have a "file" attribute that "includes" another file.
+// Here we copy the file into the main tree (if applicable).
+void ProcessVariantIncludes(XMLElement* element, XMLDocument* doc) {
+  if (!element) {
+    return;
+  }
+  
+  const char* file_attrib = element->Attribute("file");
+  if (!file_attrib) {
+    return;
+  }
+
+  std::string full_path = std::string(kInputPrefix) + kVariantPathPrefix + file_attrib;
+  XMLDocument xml_doc;
+  if (xml_doc.LoadFile(full_path.c_str()) != 0) {
+    throw std::runtime_error(std::string("Failed to open for variant inclusion: ") + full_path);
+  }
+
+  XMLElement* root = xml_doc.FirstChildElement("variant");
+  if (!root) {
+    throw std::runtime_error(std::string("Variant include file ") + full_path + " does not have <variant> root");
+  }
+  ProcessVariantIncludes(root, doc);
+
+  XMLElement* child = root->FirstChildElement();
+  while (child) {
+    element->InsertEndChild(DeepCopy(child, doc));
+    child = child->NextSiblingElement();
+  }
+}
 }
 
 // Returns name and transform of attachment points.
@@ -100,7 +146,7 @@ void GetAttachmentPoints(aiNode* node, std::vector<std::pair<std::string, aiMatr
     current_matrix = aiMatrix4x4();
     points->push_back(std::make_pair(std::string("root"), current_matrix));
   } else {
-    current_matrix = node->mTransformation * current_matrix;
+    current_matrix = current_matrix * node->mTransformation;
     points->push_back(std::make_pair(std::string(node->mName.C_Str()), current_matrix));
   }
 
@@ -111,10 +157,7 @@ void GetAttachmentPoints(aiNode* node, std::vector<std::pair<std::string, aiMatr
 
 // textures are stored next to meshes in actor XML, but we put them in with
 // meshes.
-void ParseMesh(
-    const std::string& mesh_path,
-    const std::vector<std::string>& texture_types,
-    const std::vector<std::string>& texture_files) {
+void ParseMesh(const std::string& mesh_path) {
   std::string full_path = std::string(kInputPrefix) + kMeshPathPrefix + mesh_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing mesh % at %", mesh_path, full_path);
@@ -225,8 +268,8 @@ void ParseMesh(
 
   for (const auto& pair : points) {
     attachment_point_names.push_back(pair.first);
-    for (int row = 0; row < 4; ++row) {
-      for (int col = 0; col < 4; ++col) {
+    for (int col = 0; col < 4; ++col) {
+      for (int row = 0; row < 4; ++row) {
         attachment_point_transforms.push_back(pair.second[row][col]);
       }
     }
@@ -241,8 +284,6 @@ void ParseMesh(
     /*tangents=*/builder.CreateVector(tangents),
     /*tex_coords=*/builder.CreateVector(tex_coords),
     /*ao_tex_coords=*/builder.CreateVector(ao_tex_coords),
-    /*texture_types=*/builder.CreateVectorOfStrings(texture_types),
-    /*texture_files=*/builder.CreateVectorOfStrings(texture_files),
     /*attachment_point_names=*/builder.CreateVectorOfStrings(attachment_point_names),
     /*attachment_point_transforms=*/builder.CreateVector(attachment_point_transforms)
     );
@@ -327,7 +368,9 @@ void MakeActor(const std::string& actor_path) {
 
     std::vector<flatbuffers::Offset<data::Variant>> variants;
 
-    for (auto xml_variant : xml_variants) {
+    for (XMLHandle xml_variant : xml_variants) {
+      ProcessVariantIncludes(xml_variant.ToElement(), &xml_doc);
+
       float frequency = xml_variant.ToElement()->FloatAttribute("frequency", -1.0f);
 
       if (frequency == 0.0f) {
@@ -346,24 +389,26 @@ void MakeActor(const std::string& actor_path) {
           throw std::runtime_error("More than one mesh in a variant?");
         }
         mesh_path = meshes[0].FirstChild().ToNode()->Value();
+        ParseMesh(mesh_path);
+        mesh_path = RemoveExtension(mesh_path) + ".fb";
+      }
 
-        auto textures_containers = GetAllChildrenElements(xml_variant, "textures");
-        if (textures_containers.size() != 1) {
-          throw std::runtime_error("More than one or no texture in a variant with mesh?");
-        }
-
-        std::vector<std::string> texture_types;
-        std::vector<std::string> texture_files;
+      auto textures_containers = GetAllChildrenElements(xml_variant, "textures");
+      std::vector<flatbuffers::Offset<data::Texture>> texture_offsets;
+      if (textures_containers.size() > 1) {
+        throw std::runtime_error("More than one <texture>?");
+      } else if (textures_containers.size() == 1) {
         auto textures = GetAllChildrenElements(textures_containers[0], "texture");
         for (auto& texture : textures) {
-          std::string texture_type = texture.ToElement()->Attribute("name");
+          std::string texture_name = texture.ToElement()->Attribute("name");
           std::string texture_file = texture.ToElement()->Attribute("file");
           SaveTexture(texture_file);
-          texture_types.push_back(texture_type);
-          texture_files.push_back(RemoveExtension(texture_file));
+          texture_offsets.push_back(data::CreateTexture(
+              builder,
+              /*name=*/builder.CreateString(texture_name),
+              /*file=*/builder.CreateString(RemoveExtension(texture_file))
+            ));
         }
-        ParseMesh(mesh_path, texture_types, texture_files);
-        mesh_path = RemoveExtension(mesh_path) + ".fb";
       }
 
       std::vector<flatbuffers::Offset<data::Prop>> props_offsets;
@@ -373,26 +418,41 @@ void MakeActor(const std::string& actor_path) {
         for (auto& prop : props) {
           const char* actor_attr = prop.ToElement()->Attribute("actor");
           const char* attachpoint_attr = prop.ToElement()->Attribute("attachpoint");
-          if (!actor_attr || !attachpoint_attr) {
-            continue;
+          if (!attachpoint_attr) {
+            throw std::runtime_error("Prop with no attachpoint?");
           }
-          std::string actor = actor_attr;
-          std::string attachpoint = attachpoint_attr;
-          props_offsets.push_back(data::CreateProp(
-              builder,
-              /*actor=*/builder.CreateString(actor),
-              /*attachpoint=*/builder.CreateString(attachpoint)));
-          LOG_DEBUG("Prop: % (%)", actor, attachpoint);
-          MakeActor(actor);
+          if (!actor_attr || std::string(actor_attr).empty()) {
+            // A prop without actor means we are clearing an attachpoint.
+            props_offsets.push_back(data::CreateProp(
+                builder,
+                /*actor=*/builder.CreateString(""),
+                /*attachpoint=*/builder.CreateString(attachpoint_attr)));
+            LOG_DEBUG("Prop: (detach) (%)", attachpoint_attr);
+          } else {
+            std::string actor = actor_attr;
+            std::string attachpoint = attachpoint_attr;
+            props_offsets.push_back(data::CreateProp(
+                builder,
+                /*actor=*/builder.CreateString(RemoveExtension(actor) + ".fb"),
+                /*attachpoint=*/builder.CreateString(attachpoint)));
+            LOG_DEBUG("Prop: % (%)", actor, attachpoint);
+            MakeActor(actor);
+          }
         }
+      }
+
+      std::string name;
+      if (xml_variant.ToElement()->Attribute("name")) {
+        name = xml_variant.ToElement()->Attribute("name");
       }
 
       variants.push_back(data::CreateVariant(
           builder,
-          /*name=*/builder.CreateString(xml_variant.ToElement()->Attribute("name")),
+          /*name=*/builder.CreateString(name),
           /*frequency=*/frequency,
           /*mesh_path=*/builder.CreateString(mesh_path),
-          /*props=*/builder.CreateVector(props_offsets)));
+          /*props=*/builder.CreateVector(props_offsets),
+          /*textures=*/builder.CreateVector(texture_offsets)));
     }
     groups.push_back(CreateGroup(builder, /*variants=*/builder.CreateVector(variants)));
   }
@@ -407,6 +467,8 @@ void MakeActor(const std::string& actor_path) {
 
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
-  MakeActor(kTestActorPath);
+  for (const auto& path : kTestActorPaths) {
+    MakeActor(path);
+  }
   return 0;
 }

@@ -175,7 +175,7 @@ void DeInitSDL() {
 }
 
 int main(int /*argc*/, char** /*argv*/) {
-  logger.LogToStdOutLevel(Logger::eLevel::INFO);
+  logger.LogToStdErrLevel(Logger::eLevel::INFO);
 
   #ifdef __EMSCRIPTEN__
   int have_webgl2 = emscripten_run_script_int(R""(
@@ -198,7 +198,9 @@ int main(int /*argc*/, char** /*argv*/) {
   g_state.renderer = std::make_unique<Renderer>();
 
   //ActorTemplate fortress("structures/persians/fortress.fb");
-  ActorTemplate fortress("structures/romans/fortress.fb");
+  //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/persians/stable.fb");
+  ActorTemplate& fortress = ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb");
+  //ActorTemplate& fortress = ActorTemplate::GetTemplate("props/structures/persians/stable_horse_a.fb");
 
   g_state.actors.push_back(fortress.MakeActor());
 

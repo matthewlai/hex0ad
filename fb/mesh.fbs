@@ -27,9 +27,6 @@ table Mesh {
   // Size nVertices * 2.
   ao_tex_coords:[float];
 
-  texture_types:[string];
-  texture_files:[string];
-
   // Attachment points.
   attachment_point_names:[string];
 

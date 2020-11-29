@@ -99,6 +99,8 @@ void Renderer::Render(RenderableIterator begin, RenderableIterator end) {
 
   render_context_.eye_pos = glm::vec3(eye_x, eye_y, 20.0f);
 
+  render_context_.eye_pos *= 0.2f;
+
   glm::mat4 view = glm::lookAt(render_context_.eye_pos, glm::vec3(0.0f, 0.0f, 5.0f),
     glm::vec3(0.0f, 0.0f, 1.0f));
 

@@ -5,6 +5,7 @@
 #include <optional>
 #include <random>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -22,14 +23,26 @@ class ActorTemplate;
 // actor instantiated from it.
 class Actor : public Renderable {
  public:
+  // This struct describes how a group should be rendered. That includes a variant
+  // selection and potentially additional Actors (which have their own list of group
+  // configs) in case the variant includes props (actors attached to the actor).
+  struct GroupConfig {
+    int variant_selection;
+    std::vector<std::pair<std::string, Actor>> props;
+  };
+
+  using ActorConfig = std::vector<GroupConfig>;
+
   void Render(RenderContext* context) override;
+  void Render(RenderContext* context, const glm::mat4& model);
+
   virtual ~Actor() {}
 
  private:
-  Actor(ActorTemplate* actor_template);
+  Actor(ActorTemplate* actor_template, bool randomize = true);
 
   ActorTemplate* template_;
-  std::vector<int> variant_selections_;
+  ActorConfig actor_config_;
 
   friend class ActorTemplate;
 };
@@ -37,25 +50,22 @@ class Actor : public Renderable {
 // Corresponds to an actor .fbs file, which corresponds to an actor XML.
 class ActorTemplate {
  public:
-  ActorTemplate(const std::string& actor_path);
+  static ActorTemplate& GetTemplate(const std::string& actor_path);
 
   Actor MakeActor() { return Actor(this); }
 
   int NumGroups() const { return actor_data_->groups()->size(); }
   int NumVariants(int group) const { return actor_data_->groups()->Get(group)->variants()->size(); }
 
-  void Render(const std::vector<int>& variant_selections, Renderable::RenderContext* context);
+  // Render a variant from a group. Props are ignored.
+  void Render(Renderable::RenderContext* context, const Actor::ActorConfig& config, const glm::mat4& model);
 
-  std::mt19937& Rng() {
-    if (!rng_) {
-      std::random_device rd;
-      rng_ = std::mt19937(rd());
-    }
-    return *rng_;
-  }
+  std::mt19937& Rng() { return *rng_; }
 
  private:
-  std::optional<std::mt19937> rng_;
+  ActorTemplate(const std::string& actor_path, std::mt19937* rng);
+
+  std::mt19937* rng_;
   std::vector<uint8_t> actor_raw_buffer_;
   const data::Actor* actor_data_;
 };

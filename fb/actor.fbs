@@ -1,18 +1,27 @@
 namespace data;
 
+// A prop with no actor means the prop at the attachpoint should be
+// cleared (eg. garrison flags on death). Otherwise it means the
+// specified actor should be attached to the attachpoint.
 table Prop {
   actor:string;
   attachpoint:string;
+}
+
+table Texture {
+  name:string;
+  file:string;
 }
 
 // Variants with frequency > 0 may be randomly selected.
 // Variants with frequency = 0 are either disabled or selected by name.
 // Each variant may have animations, (1x) mesh, props, and/or textures.
 table Variant {
-	name:string;
-	frequency:float;
-	mesh_path:string;
+  name:string;
+  frequency:float;
+  mesh_path:string;
   props:[Prop];
+  textures:[Texture];
 }
 
 table Group {
