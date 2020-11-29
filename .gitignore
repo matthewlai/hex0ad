@@ -20,5 +20,6 @@ vs_proj/.vs/*
 *.sublime-workspace
 0ad_assets/*
 !0ad_assets/Download.txt
+assets/*
 hex0ad
 make_assets
