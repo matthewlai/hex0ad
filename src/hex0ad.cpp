@@ -199,8 +199,8 @@ int main(int /*argc*/, char** /*argv*/) {
 
   //ActorTemplate fortress("structures/persians/fortress.fb");
   //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/persians/stable.fb");
-  ActorTemplate& fortress = ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb");
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("props/structures/persians/stable_horse_a.fb");
+  //ActorTemplate& fortress = ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb");
+  ActorTemplate& fortress = ActorTemplate::GetTemplate("props/structures/persians/stable_horse_a.fb");
 
   g_state.actors.push_back(fortress.MakeActor());
 

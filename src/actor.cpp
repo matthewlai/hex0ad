@@ -103,16 +103,22 @@ template <typename BufT>
 GLuint MakeAndUploadVBO(GLenum binding_target, BufT* buf) {
   GLuint vbo_id;
   glGenBuffers(1, &vbo_id);
+  CHECK_GL_ERROR
   glBindBuffer(binding_target, vbo_id);
+  CHECK_GL_ERROR
   glBufferData(binding_target, sizeof(typename BufT::return_type) * buf->size(), 
                buf->data(), GL_STATIC_DRAW);
+  CHECK_GL_ERROR
   return vbo_id;
 }
 
 void UseVBO(GLenum binding_target, int attrib_location, GLenum gl_type, int components_per_element, GLuint vbo_id) {
   glEnableVertexAttribArray(attrib_location);
+  CHECK_GL_ERROR
   glBindBuffer(binding_target, vbo_id);
+  CHECK_GL_ERROR
   glVertexAttribPointer(attrib_location, components_per_element, gl_type, GL_FALSE, 0, (const void*) 0);
+  CHECK_GL_ERROR
 }
 
 std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_name) {
@@ -134,7 +140,7 @@ std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_na
         mtx[j] = mesh_data->attachment_point_transforms()->Get(i * 16 + j);
       }
       ret[mesh_data->attachment_point_names()->Get(i)->str()] = glm::make_mat4(mtx);
-      LOG_INFO("Attachment Point %\n%", mesh_data->attachment_point_names()->Get(i)->str(),
+      LOG_DEBUG("Attachment Point %\n%", mesh_data->attachment_point_names()->Get(i)->str(),
                 glm::to_string(glm::make_mat4(mtx)));
     }
 
@@ -173,6 +179,11 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
       data.lower ## _loc = data.shader->GetUniformLocation(#lower);
     GRAPHICS_SETTINGS
     #undef GraphicsSetting
+
+    LOG_INFO("% vertices", mesh_data->vertices()->size());
+    for (int i = 0; i < 100; ++i) {
+      LOG_INFO("% % %", mesh_data->vertices()->Get(i*3), mesh_data->vertices()->Get(i*3+1), mesh_data->vertices()->Get(i*3+2));
+    }
 
     // Upload all the vertex attributes to the GPU.
     data.vertices_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->vertices());

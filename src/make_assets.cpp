@@ -35,7 +35,7 @@ namespace {
 //static constexpr const char* kTestActorPath = "structures/persians/fortress.xml";
 static constexpr const char* kTestActorPaths[] = {
     "structures/persians/stable.xml",
-    "units/athenians/hero_infantry_javelinist_iphicrates.xml"
+    //"units/athenians/hero_infantry_javelinist_iphicrates.xml"
     };
 
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
@@ -199,7 +199,7 @@ void ParseMesh(const std::string& mesh_path) {
   }
 
   // Only deal with 1 texture channel for now (is the second one for ambient occlusion map?).
-  std::vector<float> tex_coords(mesh->mNumVertices * 2);
+  std::vector<float> tex_coords(mesh->mNumVertices * 2, 0.0f);
   constexpr int kTexCoordsChannel = 0;
   if (mesh->mNumUVComponents[kTexCoordsChannel] == 2) {
     for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
@@ -209,7 +209,7 @@ void ParseMesh(const std::string& mesh_path) {
     }
   }
 
-  std::vector<float> ao_tex_coords(mesh->mNumVertices * 2);
+  std::vector<float> ao_tex_coords(mesh->mNumVertices * 2, 0.0f);
   constexpr int kAoTexCoordsChannel = 1;
   if (mesh->mNumUVComponents[kAoTexCoordsChannel] == 2) {
     for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
@@ -235,6 +235,9 @@ void ParseMesh(const std::string& mesh_path) {
   std::vector<float> vertices(mesh->mNumVertices * 3);
   for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
     auto& vec = mesh->mVertices[i];
+    if (i < 100) {
+      LOG_INFO("% % %", vec[0], vec[1], vec[2]);
+    }
     vertices[i * 3] = vec[0];
     vertices[i * 3 + 1] = vec[1];
     vertices[i * 3 + 2] = vec[2];
@@ -248,10 +251,8 @@ void ParseMesh(const std::string& mesh_path) {
     normals[i * 3 + 2] = vec[2];
   }
 
-  std::vector<float> tangents;
+  std::vector<float> tangents(mesh->mNumVertices * 3, 0.0f);
   if (mesh->HasTangentsAndBitangents()) {
-    // We may not have tangents if we don't have texture coordinates.
-    tangents.resize(mesh->mNumVertices * 3);
     for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
       auto& vec = mesh->mTangents[i];
       tangents[i * 3] = vec[0];

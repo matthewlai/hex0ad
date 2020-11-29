@@ -1,5 +1,7 @@
 #include "utils.h"
 
+#include <cstring>
+
 std::vector<std::uint8_t> ReadWholeFile(const std::string& path) {
   std::ifstream is(path.c_str(), std::ifstream::in | std::ifstream::binary);
   if (!is) {
