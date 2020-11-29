@@ -5,8 +5,9 @@
 #include <vector>
 
 #include "glm/gtc/matrix_inverse.hpp"
-#include "glm/gtx/string_cast.hpp"
 #include "glm/gtc/type_ptr.hpp"
+#include "glm/gtx/string_cast.hpp"
+#include "glm/gtx/transform.hpp"
 #include "lodepng/lodepng.h"
 
 #include "logger.h"
@@ -180,11 +181,6 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     GRAPHICS_SETTINGS
     #undef GraphicsSetting
 
-    LOG_INFO("% vertices", mesh_data->vertices()->size());
-    for (int i = 0; i < 100; ++i) {
-      LOG_INFO("% % %", mesh_data->vertices()->Get(i*3), mesh_data->vertices()->Get(i*3+1), mesh_data->vertices()->Get(i*3+2));
-    }
-
     // Upload all the vertex attributes to the GPU.
     data.vertices_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->vertices());
     data.normals_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->normals());
@@ -294,6 +290,7 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_te
 }
 
 void Actor::Render(RenderContext* context) {
+  //Render(context, glm::rotate(static_cast<float>(M_PI), glm::vec3(1.0f, 0.0f, 0.0f)));
   Render(context, glm::mat4(1.0f));
 }
 
@@ -359,21 +356,22 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
 
   RenderMesh(mesh_path, textures, context->vp, model, context);
 
+  attachpoints["root"] = attachpoints["main_mesh"];
+
   for (auto& [point, actor_templates] : props) {
     for (auto& actor_template : actor_templates) {
       auto it = attachpoints.find(point);
       if (it == attachpoints.end()) {
         it = attachpoints.find(std::string("prop_") + point);
       }
-      if (it == attachpoints.end()) {
-        it = attachpoints.find(std::string("Biped_") + point);
-      }
+      
       if (it == attachpoints.end()) {
         it = attachpoints.find(std::string("Biped_prop_") + point);
       }
       if (it == attachpoints.end()) {
         it = attachpoints.find(std::string("Biped_prop-") + point);
       }
+
       if (it != attachpoints.end()) {
         glm::mat4 prop_model = model * it->second;
         // TODO: actually make ActorConfig recursive.

@@ -1,6 +1,8 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -32,10 +34,17 @@ using tinyxml2::XMLHandle;
 using tinyxml2::XMLNode;
 
 namespace {
-//static constexpr const char* kTestActorPath = "structures/persians/fortress.xml";
 static constexpr const char* kTestActorPaths[] = {
-    "structures/persians/stable.xml",
-    //"units/athenians/hero_infantry_javelinist_iphicrates.xml"
+    //"structures/britons/fortress.xml",
+    //"structures/britons/civic_centre.xml",
+    //"props/structures/britons/civic_centre_props_new.xml",
+    //"structures/persians/fortress.xml",
+    //"structures/romans/fortress.xml",
+    //"structures/athenians/fortress.xml",
+    //"structures/mauryas/fortress.xml",
+    //"structures/persians/stable.xml",
+    //"units/athenians/hero_infantry_javelinist_iphicrates.xml",
+    "units/romans/cavalry_spearman_a_r.xml",
     };
 
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
@@ -46,6 +55,21 @@ static constexpr const char* kActorPathPrefix = "art/actors/";
 static constexpr const char* kMeshPathPrefix = "art/meshes/";
 static constexpr const char* kTexturePathPrefix = "art/textures/skins/";
 static constexpr const char* kVariantPathPrefix = "art/variants/";
+
+class DoneTracker {
+ public:
+  bool ShouldSkip(const std::string& s) {
+    if (done_set_.find(s) != done_set_.end()) {
+      return true;
+    } else {
+      done_set_.insert(s);
+      return false;
+    }
+  }
+
+ private:
+  std::set<std::string> done_set_;
+};
 
 std::vector<XMLHandle> GetAllChildrenElements(XMLHandle root, const std::string& elem) {
   std::vector<XMLHandle> ret;
@@ -95,7 +119,7 @@ void WriteToFile(const std::string& path, uint8_t* buf, std::size_t size) {
 
 XMLNode* DeepCopy(XMLNode* node, XMLDocument* doc) {
     XMLNode* ret = node->ShallowClone(doc);
-    for (XMLElement* child = node->FirstChildElement(); child != nullptr; child = child->NextSiblingElement()) {
+    for (XMLNode* child = node->FirstChild(); child != nullptr; child = child->NextSibling()) {
       ret->InsertEndChild(DeepCopy(child, doc));
     }
 
@@ -126,28 +150,28 @@ void ProcessVariantIncludes(XMLElement* element, XMLDocument* doc) {
   }
   ProcessVariantIncludes(root, doc);
 
-  XMLElement* child = root->FirstChildElement();
+  XMLNode* child = root->FirstChild();
   while (child) {
     element->InsertEndChild(DeepCopy(child, doc));
-    child = child->NextSiblingElement();
+    child = child->NextSibling();
   }
 }
 }
 
 // Returns name and transform of attachment points.
-void GetAttachmentPoints(aiNode* node, std::vector<std::pair<std::string, aiMatrix4x4>>* points, aiMatrix4x4 current_matrix) {
+void GetAttachmentPoints(aiNode* node, std::map<std::string, aiMatrix4x4>* points, aiMatrix4x4 current_matrix) {
   if (!node) {
     return;
   }
 
+  current_matrix *= node->mTransformation;
+
   // If we have a node with mesh, this is the root and we can reset the current_matrix.
   // We have already checked by this point that there is only one mesh in the scene.
   if (node->mNumMeshes > 0) {
-    current_matrix = aiMatrix4x4();
-    points->push_back(std::make_pair(std::string("root"), current_matrix));
+    (*points)["main_mesh"] = current_matrix;
   } else {
-    current_matrix = current_matrix * node->mTransformation;
-    points->push_back(std::make_pair(std::string(node->mName.C_Str()), current_matrix));
+    (*points)[node->mName.C_Str()] = current_matrix;
   }
 
   for (unsigned int i = 0; i < node->mNumChildren; ++i) {
@@ -158,6 +182,10 @@ void GetAttachmentPoints(aiNode* node, std::vector<std::pair<std::string, aiMatr
 // textures are stored next to meshes in actor XML, but we put them in with
 // meshes.
 void ParseMesh(const std::string& mesh_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(mesh_path)) {
+    return;
+  }
   std::string full_path = std::string(kInputPrefix) + kMeshPathPrefix + mesh_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing mesh % at %", mesh_path, full_path);
@@ -235,9 +263,6 @@ void ParseMesh(const std::string& mesh_path) {
   std::vector<float> vertices(mesh->mNumVertices * 3);
   for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
     auto& vec = mesh->mVertices[i];
-    if (i < 100) {
-      LOG_INFO("% % %", vec[0], vec[1], vec[2]);
-    }
     vertices[i * 3] = vec[0];
     vertices[i * 3 + 1] = vec[1];
     vertices[i * 3 + 2] = vec[2];
@@ -261,17 +286,21 @@ void ParseMesh(const std::string& mesh_path) {
     }
   }
 
-  std::vector<std::pair<std::string, aiMatrix4x4>> points;
+  std::map<std::string, aiMatrix4x4> points;
   GetAttachmentPoints(scene->mRootNode, &points, aiMatrix4x4());
+
+  aiMatrix4x4 root_inverse = points["main_mesh"];
+  root_inverse.Inverse();
 
   std::vector<std::string> attachment_point_names;
   std::vector<float> attachment_point_transforms;
 
   for (const auto& pair : points) {
     attachment_point_names.push_back(pair.first);
+    aiMatrix4x4 transform = root_inverse * pair.second;
     for (int col = 0; col < 4; ++col) {
       for (int row = 0; row < 4; ++row) {
-        attachment_point_transforms.push_back(pair.second[row][col]);
+        attachment_point_transforms.push_back(transform[row][col]);
       }
     }
   }
@@ -294,6 +323,10 @@ void ParseMesh(const std::string& mesh_path) {
 }
 
 void SaveTexture(const std::string& texture_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(texture_path)) {
+    return;
+  }
   std::string full_path = std::string(kInputPrefix) + kTexturePathPrefix + texture_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Saving texture % at %", texture_path, full_path);
@@ -340,6 +373,10 @@ void SaveTexture(const std::string& texture_path) {
 }
 
 void MakeActor(const std::string& actor_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(actor_path)) {
+    return;
+  }
   std::string full_path = std::string(kInputPrefix) + kActorPathPrefix + actor_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing actor % at %", actor_path, full_path);

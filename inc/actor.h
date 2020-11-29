@@ -54,6 +54,8 @@ class ActorTemplate {
 
   Actor MakeActor() { return Actor(this); }
 
+  std::string Name() const { return actor_data_->path()->str(); }
+
   int NumGroups() const { return actor_data_->groups()->size(); }
   int NumVariants(int group) const { return actor_data_->groups()->Get(group)->variants()->size(); }
 
