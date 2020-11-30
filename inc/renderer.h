@@ -99,7 +99,7 @@ void Renderer::Render(RenderableIterator begin, RenderableIterator end) {
 
   render_context_.eye_pos = glm::vec3(eye_x, eye_y, 20.0f);
 
-  float distance_ratio = 0.3f;
+  float distance_ratio = 1.0f;
 
   render_context_.eye_pos *= distance_ratio;
 

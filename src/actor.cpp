@@ -1,6 +1,7 @@
 #include "actor.h"
 
 #include <fstream>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
@@ -282,7 +283,13 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
 Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_template) {
   for (int group = 0; group < template_->NumGroups(); ++group) {
-    std::uniform_int_distribution<> dist(0, template_->NumVariants(group) - 1);
+    std::vector<float> probability_densities;
+    for (int variant = 0; variant < template_->NumVariants(group); ++variant) {
+      probability_densities.push_back(template_->VariantFrequency(group, variant));
+    }
+
+    std::discrete_distribution dist(probability_densities.begin(), probability_densities.end());
+
     GroupConfig group_config;
     group_config.variant_selection = randomize ? dist(actor_template->Rng()) : 0;
     actor_config_.push_back(std::move(group_config));

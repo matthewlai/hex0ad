@@ -58,6 +58,7 @@ class ActorTemplate {
 
   int NumGroups() const { return actor_data_->groups()->size(); }
   int NumVariants(int group) const { return actor_data_->groups()->Get(group)->variants()->size(); }
+  float VariantFrequency(int group, int variant) { return actor_data_->groups()->Get(group)->variants()->Get(variant)->frequency(); }
 
   // Render a variant from a group. Props are ignored.
   void Render(Renderable::RenderContext* context, const Actor::ActorConfig& config, const glm::mat4& model);

@@ -198,10 +198,10 @@ int main(int /*argc*/, char** /*argv*/) {
   g_state.renderer = std::make_unique<Renderer>();
 
   //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/britons/civic_centre.fb");
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/mauryas/fortress.fb");
+  ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/mauryas/fortress.fb");
   //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/persians/stable.fb");
   //ActorTemplate& fortress = ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb");
-  ActorTemplate& fortress = ActorTemplate::GetTemplate("units/romans/cavalry_spearman_a_r.fb");
+  //ActorTemplate& fortress = ActorTemplate::GetTemplate("units/romans/hero_cavalry_swordsman_maximus_r.fb");
   //ActorTemplate& fortress = ActorTemplate::GetTemplate("props/structures/persians/stable_horse_a.fb");
 
   g_state.actors.push_back(fortress.MakeActor());
