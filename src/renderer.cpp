@@ -70,3 +70,81 @@ Renderer::Renderer() {
   glBindVertexArray(vao); 
   #endif
 }
+
+void Renderer::RenderFrameBegin() {
+  // Make sure the last frame swap is done. This doesn't result in much
+  // performance penalty because with double buffering (as opposed to triple
+  // buffering), most GL calls we make below will require the swap to be done
+  // anyways. Calling glFinish() here allows us to get a better time measurement.
+  // All non-graphics CPU work should have been done by this point.
+  glFinish();
+
+  // Unless we are falling terribly behind (code before this point taking more than
+  //  an entire frame period), this is when the buffer swap happens.
+  render_context_.frame_start_time = GetTimeUs();
+
+  SDL_Window* window = SDL_GL_GetCurrentWindow();
+  int window_width;
+  int window_height;
+  SDL_GL_GetDrawableSize(window, &window_width, &window_height);
+
+  glViewport(0, 0, window_width, window_height);
+
+  glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+  glEnable(GL_CULL_FACE);
+  glEnable(GL_DEPTH_TEST);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  double camera_angle_rad = render_context_.frame_start_time / 3000000.0;
+
+  float eye_x = 30.0f * sin(camera_angle_rad);
+  float eye_y = 30.0f * cos(camera_angle_rad);
+
+  render_context_.eye_pos = glm::vec3(eye_x, eye_y, 20.0f);
+
+  float distance_ratio = 3.0f;
+
+  render_context_.eye_pos *= distance_ratio;
+
+  float near_z = 1.0f * distance_ratio;
+  float far_z = 100.0f * distance_ratio;
+
+  glm::mat4 view = glm::lookAt(render_context_.eye_pos, glm::vec3(0.0f, 0.0f, 5.0f),
+    glm::vec3(0.0f, 0.0f, 1.0f));
+
+  glm::mat4 projection = glm::perspective(glm::radians(90.0f),
+    static_cast<float>(window_width) / window_height,
+    near_z, far_z);
+
+  render_context_.vp = projection * view;
+
+  // Put the light 45 degrees from eye.
+  render_context_.light_pos = glm::vec3(30.0f * sin(camera_angle_rad + M_PI / 4.0f),
+                                        30.0f * cos(camera_angle_rad + M_PI / 4.0f), 7.0f) * distance_ratio;
+}
+
+void Renderer::Render(Renderable* renderable) {
+  renderable->Render(&render_context_);
+}
+
+void Renderer::RenderFrameEnd() {
+  // This is when all the draw calls have been issued (all the CPU work is done).
+  uint64_t draw_calls_end_time = GetTimeUs();
+
+  glFinish();
+
+  // This is when all the drawing is done (to the back buffer).
+  uint64_t frame_end_time = GetTimeUs();
+
+  ++render_context_.frame_counter;
+  if ((render_context_.frame_start_time - last_stat_time_us_) > kRenderStatsPeriod) {
+    uint64_t time_since_last_frame_us = render_context_.frame_start_time - render_context_.last_frame_time_us;
+    float frame_rate = 1000000.0f / time_since_last_frame_us;
+    LOG_INFO("Frame rate: %, draw calls time: % us, render time: % us",
+             frame_rate,
+             (draw_calls_end_time - render_context_.frame_start_time),
+             (frame_end_time - render_context_.frame_start_time));
+    last_stat_time_us_ = render_context_.frame_start_time;
+  }
+  render_context_.last_frame_time_us = render_context_.frame_start_time;
+}

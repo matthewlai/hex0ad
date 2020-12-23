@@ -37,14 +37,20 @@ using tinyxml2::XMLNode;
 namespace {
 static constexpr const char* kTestActorPaths[] = {
     //"structures/britons/fortress.xml",
-    //"structures/britons/civic_centre.xml",
+    "structures/britons/civic_centre.xml",
     //"props/structures/britons/civic_centre_props_new.xml",
     //"structures/persians/fortress.xml",
     //"structures/romans/fortress.xml",
     //"structures/athenians/fortress.xml",
+
     "structures/mauryas/fortress.xml",
-    //"structures/persians/stable.xml",
-    //"units/athenians/hero_infantry_javelinist_iphicrates.xml",
+    "structures/britons/fortress.xml",
+    "structures/persians/fortress.xml",
+    "structures/romans/fortress.xml",
+    "structures/spartans/fortress.xml",
+
+    "structures/persians/stable.xml",
+    "units/athenians/hero_infantry_javelinist_iphicrates.xml",
     //"units/romans/cavalry_spearman_a_m.xml",
     "units/romans/hero_cavalry_swordsman_maximus_r.xml",
     };
@@ -319,22 +325,13 @@ void ParseMesh(const std::string& mesh_path) {
   aiMatrix4x4 root_inverse = points["main_mesh"];
   root_inverse.Inverse();
 
-  root_inverse = aiMatrix4x4(
-      1.0f, 0.0f, 0.0f, 0.0f,
-      0.0f, 0.0f, -1.0f, 0.0f,
-      0.0f, 1.0f, 0.0f, 0.0f,
-      0.0f, 0.0f, 0.0f, 1.0f
-      );
-
-  LOG_INFO("Inverse:");
-  DebugPrintMatrix(root_inverse);
-
   std::vector<std::string> attachment_point_names;
   std::vector<float> attachment_point_transforms;
 
   for (const auto& pair : points) {
     attachment_point_names.push_back(pair.first);
     aiMatrix4x4 transform = root_inverse * pair.second;
+    //aiMatrix4x4 transform = pair.second;
     for (int col = 0; col < 4; ++col) {
       for (int row = 0; row < 4; ++row) {
         attachment_point_transforms.push_back(transform[row][col]);

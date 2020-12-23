@@ -281,7 +281,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   return it->second;
 }
 
-Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_template) {
+Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
   for (int group = 0; group < template_->NumGroups(); ++group) {
     std::vector<float> probability_densities;
     for (int variant = 0; variant < template_->NumVariants(group); ++variant) {
@@ -298,7 +298,8 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_te
 
 void Actor::Render(RenderContext* context) {
   //Render(context, glm::rotate(static_cast<float>(M_PI), glm::vec3(1.0f, 0.0f, 0.0f)));
-  Render(context, glm::mat4(1.0f));
+  Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)));
+  //Render(context, glm::mat4(1.0f));
 }
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
@@ -361,15 +362,20 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
     return;
   }
 
-  RenderMesh(mesh_path, textures, context->vp, model, context);
+  RenderMesh(mesh_path, textures, context->vp, model * attachpoints["main_mesh"], context);
 
-  attachpoints["root"] = attachpoints["main_mesh"];
+  //attachpoints["root"] = attachpoints["main_mesh"];
+  attachpoints["root"] = glm::mat4(1.0f);
 
   for (auto& [point, actor_templates] : props) {
     for (auto& actor_template : actor_templates) {
       auto it = attachpoints.find(point);
       if (it == attachpoints.end()) {
         it = attachpoints.find(std::string("prop_") + point);
+      }
+      
+      if (it == attachpoints.end()) {
+        it = attachpoints.find(std::string("Biped_") + point);
       }
       
       if (it == attachpoints.end()) {

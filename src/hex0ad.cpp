@@ -149,13 +149,13 @@ bool main_loop() {
     }
   }
 
-  static TestTriangleRenderable tri_renderable;
-
-  //g_state.renderer->Render(&tri_renderable);
+  g_state.renderer->RenderFrameBegin();
 
   for (auto& actor : g_state.actors) {
     g_state.renderer->Render(&actor);
   }
+
+  g_state.renderer->RenderFrameEnd();
 
   SDL_GL_SwapWindow(g_state.window);
   return quit;
@@ -197,14 +197,23 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.renderer = std::make_unique<Renderer>();
 
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/britons/civic_centre.fb");
-  ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/mauryas/fortress.fb");
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("structures/persians/stable.fb");
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb");
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("units/romans/hero_cavalry_swordsman_maximus_r.fb");
-  //ActorTemplate& fortress = ActorTemplate::GetTemplate("props/structures/persians/stable_horse_a.fb");
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/mauryas/fortress.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/fortress.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/fortress.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/romans/fortress.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/spartans/fortress.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/civic_centre.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/stable.fb").MakeActor());
+  g_state.actors.push_back(ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb").MakeActor());
+  g_state.actors.rbegin()->SetScale(5.0f);
+  g_state.actors.push_back(ActorTemplate::GetTemplate("units/romans/hero_cavalry_swordsman_maximus_r.fb").MakeActor());
+  g_state.actors.rbegin()->SetScale(5.0f);
 
-  g_state.actors.push_back(fortress.MakeActor());
+  for (std::size_t i = 0; i < g_state.actors.size(); ++i) {
+    float arg = 2.0f * M_PI / g_state.actors.size() * i;
+    glm::vec3 position(70.0f * cos(arg), 70.0f * sin(arg), 0.0f);
+    g_state.actors[i].SetPosition(position);
+  }
 
   #ifdef __EMSCRIPTEN__
   emscripten_set_main_loop(emscripten_main_loop, 0, 1);

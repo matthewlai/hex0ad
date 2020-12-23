@@ -9,6 +9,7 @@ vs_proj/*.filters
 *.d
 *.DS_Store
 *_generated.h
+*.tmp
 hex0ad.html
 hex0ad.data
 hex0ad.js

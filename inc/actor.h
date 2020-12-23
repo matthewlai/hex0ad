@@ -36,6 +36,9 @@ class Actor : public Renderable {
   void Render(RenderContext* context) override;
   void Render(RenderContext* context, const glm::mat4& model);
 
+  void SetPosition(const glm::vec3& new_position) { position_ = new_position; }
+  void SetScale(float new_scale) { scale_ = new_scale; }
+
   virtual ~Actor() {}
 
  private:
@@ -43,6 +46,9 @@ class Actor : public Renderable {
 
   ActorTemplate* template_;
   ActorConfig actor_config_;
+
+  glm::vec3 position_;
+  float scale_;
 
   friend class ActorTemplate;
 };
