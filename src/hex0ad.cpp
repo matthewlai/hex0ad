@@ -197,21 +197,25 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.renderer = std::make_unique<Renderer>();
 
+  g_state.actors.push_back(ActorTemplate::GetTemplate("props/structures/persians/stable_horse_a.fb").MakeActor());
+  //g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/stable.fb").MakeActor());
+  /*
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/mauryas/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/romans/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/spartans/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/civic_centre.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/stable.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb").MakeActor());
   g_state.actors.rbegin()->SetScale(5.0f);
   g_state.actors.push_back(ActorTemplate::GetTemplate("units/romans/hero_cavalry_swordsman_maximus_r.fb").MakeActor());
   g_state.actors.rbegin()->SetScale(5.0f);
+  */
 
   for (std::size_t i = 0; i < g_state.actors.size(); ++i) {
     float arg = 2.0f * M_PI / g_state.actors.size() * i;
-    glm::vec3 position(70.0f * cos(arg), 70.0f * sin(arg), 0.0f);
+    float dist = 0.0f;
+    glm::vec3 position(dist * cos(arg), dist * sin(arg), 0.0f);
     g_state.actors[i].SetPosition(position);
   }
 

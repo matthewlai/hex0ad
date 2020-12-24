@@ -199,7 +199,6 @@ void GetAttachmentPoints(aiNode* node, std::map<std::string, aiMatrix4x4>* point
 
   current_matrix *= node->mTransformation;
 
-  // If we have a node with mesh, this is the root and we can reset the current_matrix.
   // We have already checked by this point that there is only one mesh in the scene.
   if (node->mNumMeshes > 0) {
     (*points)["main_mesh"] = current_matrix;
@@ -331,7 +330,6 @@ void ParseMesh(const std::string& mesh_path) {
   for (const auto& pair : points) {
     attachment_point_names.push_back(pair.first);
     aiMatrix4x4 transform = root_inverse * pair.second;
-    //aiMatrix4x4 transform = pair.second;
     for (int col = 0; col < 4; ++col) {
       for (int row = 0; row < 4; ++row) {
         attachment_point_transforms.push_back(transform[row][col]);
