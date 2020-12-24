@@ -24,11 +24,6 @@ CXXFILES := $(wildcard src/*.cpp)
 CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 CXXFILES += third_party/lodepng/lodepng.cpp
 
-# Collada is used by make_assets. Only build it for non-web.
-ifneq ($(notdir $(CXX)), em++)
-	include third_party/fcollada/src/Makefile
-endif
-
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
 
 FLATBUFFER_SCHEMAS := $(wildcard fb/*.fbs)
@@ -53,10 +48,10 @@ ifeq ($(notdir $(CXX)), em++)
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
 	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
-	LDFLAGS += -lm -lassimp
+	LDFLAGS += -lm -lassimp -lFColladaSD
 
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -lassimp
+		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -lassimp -lFColladaSD
 		LDFLAGS += -lopengl32 -lglew32
 	else
 		# For UNIX-like platforms.

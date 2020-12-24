@@ -11,11 +11,8 @@ def all_directories(root):
 	return directories
 
 def create_if_not_exist(dir_name):
-	try:
-		os.mkdir(dir_name)
-		print("Created {}".format(dir_name))
-	except FileExistsError:
-		pass
+	os.makedirs(dir_name, exist_ok=True)
+	print("Created {}".format(dir_name))
 	with open(dir_name + os.sep + ".hidden", 'w') as f:
 		f.write("This file allows us to check in an empty directory to git")
 
@@ -29,12 +26,6 @@ directories_to_create = filter(lambda s : s != "third_party", directories_to_cre
 # Exclude GLM and GLI (header-only libraries)
 directories_to_create = filter(lambda s : not s.startswith("third_party\\glm"), directories_to_create)
 directories_to_create = filter(lambda s : not s.startswith("third_party\\gli"), directories_to_create)
-
-# FCollada include dir
-directories_to_create = filter(lambda s : not s.startswith("third_party\\fcollada\\include"), directories_to_create)
-
-# We are not building FCollada tests
-directories_to_create = filter(lambda s : "FColladaTest" not in s, directories_to_create)
 
 # Don't care about xcodeproj directories
 directories_to_create = filter(lambda s : "xcodeproj" not in s, directories_to_create)
