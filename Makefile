@@ -24,17 +24,22 @@ CXXFILES := $(wildcard src/*.cpp)
 CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 CXXFILES += third_party/lodepng/lodepng.cpp
 
+# Collada is used by make_assets. Only build it for non-web.
+ifneq ($(notdir $(CXX)), em++)
+	include third_party/fcollada/src/Makefile
+endif
+
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
 
 FLATBUFFER_SCHEMAS := $(wildcard fb/*.fbs)
 
 FLATBUFFER_GENERATED_FILES := $(FLATBUFFER_SCHEMAS:fb/%.fbs=fb/%_generated.h)
 
-OBJS := $(CXXFILES:%.cpp=obj/%.o) 
+OBJS := $(CXXFILES:%.cpp=obj/%.o)
 DEPS := $(CXXFILES:%.cpp=dep/%.d)
 BIN_OBJS = $(BINS:bin/%=obj/src/%.o)
 
-INCLUDES=-Iinc -Ithird_party -Ifb
+INCLUDES +=-Iinc -Ithird_party -Ifb
 
 # Platforms.
 DEFAULT_TARGETS = $(BINS)
@@ -42,13 +47,13 @@ DEFAULT_TARGETS = $(BINS)
 # Flags.
 ifeq ($(notdir $(CXX)), em++)
 	CXXFLAGS = $(INCLUDES) -std=gnu++17 -s USE_SDL=2
-	LDFLAGS = --emrun -s WASM=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]'
+	LDFLAGS += --emrun -s WASM=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]'
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS = -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
-	LDFLAGS = -lm -lassimp
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
+	LDFLAGS += -lm -lassimp
 
 	ifeq ($(OS),Windows_NT)
 		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -lassimp
