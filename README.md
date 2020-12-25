@@ -20,19 +20,12 @@ Tile-based strategy game using 0ad assets
 	* Copy flatc.exe into [mingw-w64 bin directory]/bin
 * CMake (https://cmake.org/download/)
 	* Use the win64-x64 installer and add CMake to PATH
-* FCollada for converting assets (https://github.com/rdb/fcollada)
-	* `git clone https://github.com/rdb/fcollada.git`
+* FCollada for converting assets (https://github.com/matthewlai/fcollada)
+	* `git clone https://github.com/matthewlai/fcollada.git`
 	* `cd fcollada`
 	* `cmake -G "MinGW Makefiles" -DCMAKE_INSTALL_PREFIX=build .`
 	* Build with `make MAKE="make -j 24" && make install` (or as appropriate for how many CPU cores you have)
 	* Copy build/include, lib, and bin to [MinGW installation directory]/x86_64-w64-mingw32
-* AssImp for converting assets (https://github.com/assimp/assimp/releases)
-	* Download a source code release or git commit (many broken revisions near 5.0 because of a few bugs like #2431, #2977, #3144, and #3533)
-	* As of this writing even some 5.0 revs that build result in incorrect outputs.
-	* Release 4.1.0 seems to work (with some unnecessary targets that don't build disabled).
-	* Generate Makefile with `cmake -G "MinGW Makefiles" -DASSIMP_NO_EXPORT=ON -DASSIMP_BUILD_TESTS=OFF -DASSIMP_BUILD_ASSIMP_VIEW=OFF ./`
-	* Build with `make MAKE="make -j 24"` (or as appropriate for how many CPU cores you have)
-	* Copy include and lib to [MinGW installation directory]/x86_64-w64-mingw32
 
 ## Download and convert 0ad Assets (All Platforms)
 * Download https://0adassets.s3-us-west-2.amazonaws.com/assets.7z, and extract into 0ad_assets, so you should end up with:

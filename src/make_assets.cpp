@@ -1,9 +1,11 @@
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <set>
 #include <stack>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -25,34 +27,41 @@
 #include "lodepng/lodepng.h"
 #include "tinyxml2/tinyxml2.h"
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
+// Include order is important because FCollada headers have a lot of missing includes.
+#include <FCollada.h>
+#include <FUtils/Platforms.h>
+#include <FUtils/FUtils.h>
+#include <FCDocument/FCDAsset.h>
+#include <FCDocument/FCDController.h>
+#include <FCDocument/FCDSceneNode.h>
+#include <FCDocument/FCDocument.h>
+#include <FCDocument/FCDGeometry.h>
+#include <FCDocument/FCDGeometryMesh.h>
+#include <FCDocument/FCDGeometryPolygons.h>
+#include <FCDocument/FCDGeometryPolygonsInput.h>
+#include <FCDocument/FCDGeometryPolygonsTools.h>
+#include <FCDocument/FCDGeometrySource.h>
 
-using tinyxml2::XMLDocument;
+using TinyXMLDocument = tinyxml2::XMLDocument;
 using tinyxml2::XMLElement;
 using tinyxml2::XMLHandle;
 using tinyxml2::XMLNode;
 
 namespace {
 static constexpr const char* kTestActorPaths[] = {
-    //"structures/britons/fortress.xml",
-    "structures/britons/civic_centre.xml",
-    //"props/structures/britons/civic_centre_props_new.xml",
-    //"structures/persians/fortress.xml",
-    //"structures/romans/fortress.xml",
-    //"structures/athenians/fortress.xml",
+    // "structures/britons/civic_centre.xml",
 
     "structures/mauryas/fortress.xml",
-    "structures/britons/fortress.xml",
-    "structures/persians/fortress.xml",
-    "structures/romans/fortress.xml",
-    "structures/spartans/fortress.xml",
+    // "structures/britons/fortress.xml",
+    // "structures/persians/fortress.xml",
+    // "structures/romans/fortress.xml",
+    // "structures/spartans/fortress.xml",
 
-    "structures/persians/stable.xml",
-    "units/athenians/hero_infantry_javelinist_iphicrates.xml",
-    //"units/romans/cavalry_spearman_a_m.xml",
-    "units/romans/hero_cavalry_swordsman_maximus_r.xml",
+    // "structures/persians/stable.xml",
+    // "units/athenians/hero_infantry_javelinist_iphicrates.xml",
+    // "units/romans/hero_cavalry_swordsman_maximus_r.xml",
+
+    //"props/structures/persians/stable_horse_a.xml",
     };
 
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
@@ -125,7 +134,7 @@ void WriteToFile(const std::string& path, uint8_t* buf, std::size_t size) {
   of.write(reinterpret_cast<const char*>(buf), size);
 }
 
-XMLNode* DeepCopy(XMLNode* node, XMLDocument* doc) {
+XMLNode* DeepCopy(XMLNode* node, TinyXMLDocument* doc) {
     XMLNode* ret = node->ShallowClone(doc);
     for (XMLNode* child = node->FirstChild(); child != nullptr; child = child->NextSibling()) {
       ret->InsertEndChild(DeepCopy(child, doc));
@@ -136,7 +145,7 @@ XMLNode* DeepCopy(XMLNode* node, XMLDocument* doc) {
 
 // Variants can have a "file" attribute that "includes" another file.
 // Here we copy the file into the main tree (if applicable).
-void ProcessVariantIncludes(XMLElement* element, XMLDocument* doc) {
+void ProcessVariantIncludes(XMLElement* element, TinyXMLDocument* doc) {
   if (!element) {
     return;
   }
@@ -147,7 +156,7 @@ void ProcessVariantIncludes(XMLElement* element, XMLDocument* doc) {
   }
 
   std::string full_path = std::string(kInputPrefix) + kVariantPathPrefix + file_attrib;
-  XMLDocument xml_doc;
+  TinyXMLDocument xml_doc;
   if (xml_doc.LoadFile(full_path.c_str()) != 0) {
     throw std::runtime_error(std::string("Failed to open for variant inclusion: ") + full_path);
   }
@@ -183,34 +192,259 @@ std::string ReadAndFixDaeSource(const std::string& path) {
   return ret;
 }
 
-void DebugPrintMatrix(const aiMatrix4x4& m) {
-  LOG_INFO("% % % %", m.a1, m.a2, m.a3, m.a4);
-  LOG_INFO("% % % %", m.b1, m.b2, m.b3, m.b4);
-  LOG_INFO("% % % %", m.c1, m.c2, m.c3, m.c4);
-  LOG_INFO("% % % %", m.d1, m.d2, m.d3, m.d4);
-}
-}
-
-// Returns name and transform of attachment points.
-void GetAttachmentPoints(aiNode* node, std::map<std::string, aiMatrix4x4>* points, aiMatrix4x4 current_matrix) {
-  if (!node) {
-    return;
+class ColladaDocument {
+ public:
+  ColladaDocument() {
+    doc_ = FCollada::NewTopDocument();
   }
 
-  current_matrix *= node->mTransformation;
-
-  // We have already checked by this point that there is only one mesh in the scene.
-  if (node->mNumMeshes > 0) {
-    (*points)["main_mesh"] = current_matrix;
-  } else {
-    (*points)[node->mName.C_Str()] = current_matrix;
+  ~ColladaDocument() {
+    SAFE_RELEASE(doc_);
   }
 
-  for (unsigned int i = 0; i < node->mNumChildren; ++i) {
-    GetAttachmentPoints(node->mChildren[i], points, current_matrix);
+  ColladaDocument(const ColladaDocument&) = delete;
+  ColladaDocument& operator=(const ColladaDocument&) = delete;
+
+  // Returns true for success.
+  bool LoadFromText(const std::string& text) {
+    content_ = text;
+    return FCollada::LoadDocumentFromMemory("unknown.dae", doc_, reinterpret_cast<void*>(content_.data()), text.size());
   }
+
+  FCDocument* Doc() { return doc_; }
+
+ private:
+  FCDocument* doc_;
+  std::string content_;
+};
+
+// Instances in a scene can be optionally marked for export for disambiguation.
+struct TransformedInstance {
+  FCDEntityInstance* instance;
+  FMMatrix44 transform;
+  bool export_marked;
+};
+
+// Find instances in the tree. The logic here is basically copied from
+// https://github.com/0ad/0ad/blob/01126b9f328bdbee029765a86f2ad2215c476448/source/collada/CommonConvert.cpp#L232
+// But we handle the disambiguation slightly differently.
+std::vector<TransformedInstance> FindInstances(FCDSceneNode* node, const FMMatrix44& transform) {
+  std::vector<TransformedInstance> found;
+
+  FMMatrix44 node_transform = transform * node->ToMatrix();
+
+  for (std::size_t i = 0; i < node->GetChildrenCount(); ++i) {
+    auto* child = node->GetChild(i);
+    auto child_instances = FindInstances(child, node_transform);
+    found.insert(found.end(),
+                 std::make_move_iterator(child_instances.begin()),
+                 std::make_move_iterator(child_instances.end()));
+  }
+
+  // TODO: try XSI property.
+  bool is_visible = (node->GetVisibility() > 0.0f);
+
+  if (!is_visible) {
+    return found;
+  }
+
+  bool marked = node->GetNote() == "export";
+
+  for (std::size_t i = 0; i < node->GetInstanceCount(); ++i) {
+    FCDEntity::Type type = node->GetInstance(i)->GetEntityType();
+
+    if (type != FCDEntity::GEOMETRY && type != FCDEntity::CONTROLLER) {
+      continue;
+    }
+
+    TransformedInstance t_instance;
+    t_instance.instance = node->GetInstance(i);
+    t_instance.transform = node_transform;
+    t_instance.export_marked = marked;
+    found.push_back(std::move(t_instance));
+  }
+
+  return found;
 }
 
+TransformedInstance FindSingleInstance(FCDSceneNode* node) {
+  auto all_instances = FindInstances(node, FMMatrix44::Identity);
+  auto is_marked = [](const TransformedInstance& t_instance) { return t_instance.export_marked; };
+  std::size_t num_export_marked_instances = std::count_if(all_instances.begin(), all_instances.end(), is_marked);
+
+  if (num_export_marked_instances > 1) {
+    throw std::runtime_error("More than one export-marked instance found");
+  }
+
+  if (num_export_marked_instances == 1) {
+    return *std::find_if(all_instances.begin(), all_instances.end(), is_marked);
+  }
+
+  if (all_instances.size() > 1) {
+    throw std::runtime_error("More than one instance found. Use export marking for disambiguation");
+  }
+
+  if (all_instances.empty()) {
+    throw std::runtime_error("No instance found"); 
+  }
+
+  return all_instances[0];
+}
+
+std::string DebugString(const FMMatrix44& m) {
+  std::stringstream ss;
+  for (int row = 0; row < 4; ++row) {
+    for (int col = 0; col < 4; ++col) {
+      ss << '\t' << m[row][col];
+    }
+    ss << '\n';
+  }
+  return ss.str();
+}
+
+FCDGeometryPolygons* PolysFromGeometry(FCDGeometry* geom) {
+  if (!geom->IsMesh()) {
+    throw std::runtime_error("Non-mesh geometry");
+  }
+
+  FCDGeometryMesh* mesh = geom->GetMesh();
+  if (!mesh->IsTriangles()) {
+    FCDGeometryPolygonsTools::Triangulate(mesh);
+  }
+
+  if (mesh->GetPolygonsCount() != 1) {
+    throw std::runtime_error("Mesh has != 1 set of polygons");
+  }
+
+  FCDGeometryPolygons* polys = mesh->GetPolygons(0);
+  if (!polys->FindInput(FUDaeGeometryInput::POSITION)) {
+    throw std::runtime_error("Missing positions");
+  }
+
+  if (!polys->FindInput(FUDaeGeometryInput::NORMAL)) {
+    throw std::runtime_error("Missing normals");
+  }
+
+  if (!polys->FindInput(FUDaeGeometryInput::TEXCOORD)) {
+    throw std::runtime_error("Missing texture coordinates");
+  }
+
+  // Generate tangent basis for normal mapping. We don't need
+  // bitangent because that's generated at run time in vertex
+  // shader.
+  FCDGeometrySourceList tex_sources;
+  polys->GetParent()->FindSourcesByType(FUDaeGeometryInput::TEXCOORD, tex_sources);
+  FCDGeometryPolygonsTools::GenerateTextureTangentBasis(
+      mesh, tex_sources[0], /*generateBinormals=*/false);
+
+  if (!polys->FindInput(FUDaeGeometryInput::TEXTANGENT)) {
+    throw std::runtime_error("Missing texture tangents");
+  }
+
+  return polys;
+}
+
+// Read all data from the input, looking up using indices.
+std::vector<float> GetData(FCDGeometryPolygonsInput* input,
+                           FCDGeometrySource* source = nullptr) {
+  uint64_t num_vertices = input->GetIndexCount();
+  const auto* indices = input->GetIndices();
+
+  if (!source) {
+    source = input->GetSource();
+  }
+
+  const float* source_data = source->GetData();
+  int stride = source->GetStride();
+
+  std::vector<float> data;
+  data.reserve(num_vertices * stride);
+
+  for (uint32_t i = 0; i < num_vertices; ++i) {
+    uint32_t index = indices[i];
+    for (int j = 0; j < stride; ++j) {
+      data.push_back(source_data[index * stride + j]);
+    }
+  }
+
+  return data;
+}
+
+struct VertexData {
+  // 3x position, 3x normal, 3x tangent, 2x UV, 2x ambient occlusion UV.
+  float data[13];
+
+  // Convenience functions.
+  VertexData() { std::fill(std::begin(data), std::end(data), 0.0f); }
+  float* Position() { return &data[0]; }
+  float* Normal() { return &data[3]; }
+  float* Tangent() { return &data[6]; }
+  float* UV0() { return &data[9]; }
+  float* UV1() { return &data[11]; }
+
+  bool operator<(const VertexData& other) const {
+    return std::lexicographical_compare(std::begin(data), std::end(data),
+                                        std::begin(other.data), std::end(other.data));
+  }
+
+  bool operator==(const VertexData& other) const {
+    return std::equal(std::begin(data), std::end(data), std::begin(other.data),
+                      [](float a, float b) { return fabs(a - b) < 0.0000001f; });
+  }
+
+  bool operator!=(const VertexData& other) const {
+    return !(*this == other);
+  }
+
+  void SetPosition(float* x) { std::copy(x, x + 3, Position()); }
+  void SetNormal(float* x) { std::copy(x, x + 3, Normal()); }
+  void SetTangent(float* x) { std::copy(x, x + 3, Tangent()); }
+  void SetUV0(float* x) { std::copy(x, x + 2, UV0()); }
+  void SetUV1(float* x) { std::copy(x, x + 2, UV1()); }
+};
+
+struct IndexedVertexData {
+  std::vector<VertexData> vds;
+  std::vector<uint32_t> indices;
+};
+
+// Find duplicates, and switch to an indexed representation after de-duplication.
+IndexedVertexData Reindex(std::vector<VertexData>&& vds) {
+  // First sort lexicographically.
+  using VdsWithIndex = std::pair<VertexData, uint32_t>;
+  std::vector<VdsWithIndex> vds_with_indices;
+  for (std::size_t i = 0; i < vds.size(); ++i) {
+    vds_with_indices.push_back(VdsWithIndex(std::move(vds[i]), i));
+  }
+  std::sort(vds_with_indices.begin(), vds_with_indices.end(), [](const auto& a, const auto& b) {
+    return a.first < b.first;
+  });
+
+  IndexedVertexData ret;
+
+  // Mapping from original indices to new sorted and de-dupped indices.
+  std::map<uint32_t, uint32_t> new_indices;
+
+  // Go through the vertices looking for duplicates (only have to check previous one).
+  for (std::size_t i = 0; i < vds_with_indices.size(); ++i) {
+    if (ret.vds.empty() || (vds_with_indices[i].first != ret.vds.back())) {
+      ret.vds.push_back(vds_with_indices[i].first);
+    }
+    new_indices[vds_with_indices[i].second] = (ret.vds.size() - 1);
+  }
+
+  for (std::size_t i = 0; i < vds_with_indices.size(); ++i) {
+    ret.indices.push_back(new_indices[i]);
+  }
+
+  return ret;
+}
+
+}
+
+// See https://github.com/0ad/0ad/blob/master/source/collada/PMDConvert.cpp
+// We try to match the logic in 0ad as much as possible because these assets
+// have been tested with 0ad.
 void ParseMesh(const std::string& mesh_path) {
   static DoneTracker done_tracker;
   if (done_tracker.ShouldSkip(mesh_path)) {
@@ -220,127 +454,146 @@ void ParseMesh(const std::string& mesh_path) {
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing mesh % at %", mesh_path, full_path);
   std::string source = ReadAndFixDaeSource(full_path);
-  Assimp::Importer importer;
-  const aiScene* scene = importer.ReadFileFromMemory(source.c_str(), source.size(),
-    aiProcess_CalcTangentSpace       |
-    aiProcess_Triangulate            |
-    aiProcess_JoinIdenticalVertices  |
-    aiProcess_GenNormals             |
-    aiProcess_FlipUVs                |
-    aiProcess_SortByPType,
-    full_path.c_str());
-  if (!scene) {
-    LOG_ERROR("Failed to parse %: %", mesh_path, importer.GetErrorString());
+  ColladaDocument cdoc;
+  cdoc.LoadFromText(source);
+
+  FCDSceneNode* root = cdoc.Doc()->GetVisualSceneRoot();
+  if (!root) {
+    LOG_ERROR("Failed to parse %: we have no root", mesh_path);
     return;
   }
 
-  if (scene->mNumMeshes != 1) {
-    LOG_ERROR("We have % meshes (expecting 1)", scene->mNumMeshes);
+  FMVector3 up_axis = cdoc.Doc()->GetAsset()->GetUpAxis();
+  bool yup = (up_axis.y != 0); // assume either Y_UP or Z_UP.
+  (void) yup;
+
+  TransformedInstance t_instance = FindSingleInstance(root);
+
+  FCDGeometryPolygons* polys;
+
+  if (t_instance.instance->GetEntity()->GetType() == FCDEntity::GEOMETRY) {
+    LOG_INFO("Found static geometry");
+    polys = PolysFromGeometry(static_cast<FCDGeometry*>(t_instance.instance->GetEntity()));
+  } else if (t_instance.instance->GetEntity()->GetType() == FCDEntity::CONTROLLER) {
+    LOG_INFO("Found skinned geometry");
+    FCDController* controller = static_cast<FCDController*>(t_instance.instance->GetEntity());
+    polys = PolysFromGeometry(controller->GetBaseGeometry());
+  }
+
+  auto num_vertices = polys->GetFaceVertexCount();
+
+  LOG_INFO("% vertices", num_vertices);
+
+  auto positions_data = GetData(polys->FindInput(FUDaeGeometryInput::POSITION));
+  auto normals_data = GetData(polys->FindInput(FUDaeGeometryInput::NORMAL));
+  auto tangents_data = GetData(polys->FindInput(FUDaeGeometryInput::TEXTANGENT));
+
+  std::vector<std::vector<float>> texcoords_data;
+  FCDGeometrySourceList tex_sources;
+  polys->GetParent()->FindSourcesByType(FUDaeGeometryInput::TEXCOORD, tex_sources);
+  for (auto& tex_source : tex_sources) {
+    texcoords_data.push_back(GetData(polys->FindInput(FUDaeGeometryInput::TEXCOORD),
+                                     tex_source));
+  }
+
+  if (positions_data.size() != num_vertices * 3) {
+    LOG_ERROR("Wrong position array size: % (expected %)", positions_data.size(), num_vertices * 3);
     return;
   }
 
-  auto* mesh = scene->mMeshes[0];
-  if (!mesh->HasPositions()) {
-    LOG_ERROR("We have no positions?");
+  if (normals_data.size() != num_vertices * 3) {
+    LOG_ERROR("Wrong normal array size: % (expected %)", normals_data.size(), num_vertices * 3);
     return;
   }
 
-  if (!mesh->HasNormals()) {
-    LOG_ERROR("We have no normals?");
+  if (tangents_data.size() != num_vertices * 3) {
+    LOG_ERROR("Wrong tangent array size: % (expected %)", tangents_data.size(), num_vertices * 3);
     return;
   }
 
-  for (int ch = 0; ch < AI_MAX_NUMBER_OF_TEXTURECOORDS; ++ch) {
-    if (mesh->mNumUVComponents[ch] > 0) {
-      LOG_DEBUG("Texture channel %: %", ch, mesh->mNumUVComponents[ch]);
-    } else {
-      break;
+  if (texcoords_data.empty()) {
+    LOG_ERROR("No texcoords");
+    return;
+  }
+
+  if (texcoords_data.size() > 2) {
+    LOG_ERROR("We have % texcoords. What do we do with the extra ones?", texcoords_data.size());
+    return;
+  }
+
+  LOG_INFO("% texture coordinate sets", texcoords_data.size());
+
+  std::vector<VertexData> vertex_datas(num_vertices);
+
+  for (uint64_t vertex = 0; vertex < num_vertices; ++vertex) {
+    VertexData* vd = &vertex_datas[vertex];
+    vd->SetPosition(&positions_data[vertex * 3]);
+    vd->SetNormal(&normals_data[vertex * 3]);
+    vd->SetTangent(&tangents_data[vertex * 3]);
+    vd->SetUV0(&texcoords_data[0][vertex * 2]);
+
+    if (texcoords_data.size() >= 2) {
+      vd->SetUV1(&texcoords_data[1][vertex * 2]);
     }
   }
 
-  // Only deal with 1 texture channel for now (is the second one for ambient occlusion map?).
-  std::vector<float> tex_coords(mesh->mNumVertices * 2, 0.0f);
-  constexpr int kTexCoordsChannel = 0;
-  if (mesh->mNumUVComponents[kTexCoordsChannel] == 2) {
-    for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-      auto& uv = mesh->mTextureCoords[kTexCoordsChannel][i];
-      tex_coords[i * 2] = uv[0];
-      tex_coords[i * 2 + 1] = uv[1];
-    }
-  }
+  IndexedVertexData ivd = Reindex(std::move(vertex_datas));
 
-  std::vector<float> ao_tex_coords(mesh->mNumVertices * 2, 0.0f);
-  constexpr int kAoTexCoordsChannel = 1;
-  if (mesh->mNumUVComponents[kAoTexCoordsChannel] == 2) {
-    for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-      auto& uv = mesh->mTextureCoords[kAoTexCoordsChannel][i];
-      ao_tex_coords[i * 2] = uv[0];
-      ao_tex_coords[i * 2 + 1] = uv[1];
-    }
-  }
+  LOG_INFO("% deduplicated vertex data", ivd.vds.size());
 
-  LOG_INFO("% faces", mesh->mNumFaces);
-  std::vector<uint32_t> vertex_indices(mesh->mNumFaces * 3);
-  for (uint32_t i = 0; i < mesh->mNumFaces; ++i) {
-    auto* face = &mesh->mFaces[i];
-    if (face->mNumIndices != 3) {
-      LOG_ERROR("Non-triangle with % indices detected", face->mNumIndices);
-      return;
-    }
-    vertex_indices[i * 3] = face->mIndices[0];
-    vertex_indices[i * 3 + 1] = face->mIndices[1];
-    vertex_indices[i * 3 + 2] = face->mIndices[2];
-  }
-  LOG_INFO("% vertices", mesh->mNumVertices);
-  std::vector<float> vertices(mesh->mNumVertices * 3);
-  for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-    auto& vec = mesh->mVertices[i];
+  std::vector<float> vertices(ivd.vds.size() * 3);
+  for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+    float* vec = ivd.vds[i].Position();
     vertices[i * 3] = vec[0];
     vertices[i * 3 + 1] = vec[1];
     vertices[i * 3 + 2] = vec[2];
   }
 
-  std::vector<float> normals(mesh->mNumVertices * 3);
-  for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-    auto& vec = mesh->mNormals[i];
+  std::vector<float> normals(ivd.vds.size() * 3);
+  for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+    float* vec = ivd.vds[i].Normal();
     normals[i * 3] = vec[0];
     normals[i * 3 + 1] = vec[1];
     normals[i * 3 + 2] = vec[2];
   }
 
-  std::vector<float> tangents(mesh->mNumVertices * 3, 0.0f);
-  if (mesh->HasTangentsAndBitangents()) {
-    for (uint32_t i = 0; i < mesh->mNumVertices; ++i) {
-      auto& vec = mesh->mTangents[i];
-      tangents[i * 3] = vec[0];
-      tangents[i * 3 + 1] = vec[1];
-      tangents[i * 3 + 2] = vec[2];
-    }
+  std::vector<float> tangents(ivd.vds.size() * 3);
+  for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+    float* vec = ivd.vds[i].Tangent();
+    tangents[i * 3] = vec[0];
+    tangents[i * 3 + 1] = vec[1];
+    tangents[i * 3 + 2] = vec[2];
   }
 
-  std::map<std::string, aiMatrix4x4> points;
-  GetAttachmentPoints(scene->mRootNode, &points, aiMatrix4x4());
+  std::vector<float> tex_coords(ivd.vds.size() * 2);
+  for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+    float* vec = ivd.vds[i].UV0();
+    tex_coords[i * 2] = vec[0];
+    tex_coords[i * 2 + 1] = -vec[1];
+  }
 
-  aiMatrix4x4 root_inverse = points["main_mesh"];
-  root_inverse.Inverse();
+  std::vector<float> ao_tex_coords;
+  if (texcoords_data.size() >= 2) {
+    ao_tex_coords.resize(ivd.vds.size() * 2);
+    for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+      float* vec = ivd.vds[i].UV1();
+      ao_tex_coords[i * 2] = vec[0];
+      ao_tex_coords[i * 2 + 1] = -vec[1];
+    }
+  }
 
   std::vector<std::string> attachment_point_names;
   std::vector<float> attachment_point_transforms;
 
-  for (const auto& pair : points) {
-    attachment_point_names.push_back(pair.first);
-    aiMatrix4x4 transform = root_inverse * pair.second;
-    for (int col = 0; col < 4; ++col) {
-      for (int row = 0; row < 4; ++row) {
-        attachment_point_transforms.push_back(transform[row][col]);
-      }
-    }
+  for (int i = 0; i < 5; ++i) {
+    auto* v = &ivd.indices[0];
+    LOG_INFO("% % %", v[i * 3], v[i * 3 + 1], v[i * 3 + 2]);
   }
 
   auto mesh_fb = data::CreateMesh(
     builder,
     /*path=*/builder.CreateString(RemoveExtension(mesh_path)),
-    /*vertex_indices=*/builder.CreateVector(vertex_indices),
+    /*vertex_indices=*/builder.CreateVector(ivd.indices),
     /*vertices=*/builder.CreateVector(vertices),
     /*normals=*/builder.CreateVector(normals),
     /*tangents=*/builder.CreateVector(tangents),
@@ -412,7 +665,7 @@ void MakeActor(const std::string& actor_path) {
   std::string full_path = std::string(kInputPrefix) + kActorPathPrefix + actor_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing actor % at %", actor_path, full_path);
-  XMLDocument xml_doc;
+  TinyXMLDocument xml_doc;
   if (xml_doc.LoadFile(full_path.c_str()) != 0) {
     throw std::runtime_error(std::string("Failed to open: ") + full_path);
   }
@@ -537,8 +790,10 @@ void MakeActor(const std::string& actor_path) {
 
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
+  FCollada::Initialize();
   for (const auto& path : kTestActorPaths) {
     MakeActor(path);
   }
+  FCollada::Release();
   return 0;
 }

@@ -42,16 +42,16 @@ DEFAULT_TARGETS = $(BINS)
 # Flags.
 ifeq ($(notdir $(CXX)), em++)
 	CXXFLAGS = $(INCLUDES) -std=gnu++17 -s USE_SDL=2
-	LDFLAGS += --emrun -s WASM=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]'
+	LDFLAGS = --emrun -s WASM=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]'
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
 	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
-	LDFLAGS += -lm -lassimp -lFColladaSD
+	LDFLAGS = -lm -lFColladaSD
 
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS += -lmingw32 -lSDL2main -lSDL2 -lassimp -lFColladaSD
+		LDFLAGS = -lmingw32 -lSDL2main -lSDL2 -lFColladaSD
 		LDFLAGS += -lopengl32 -lglew32
 	else
 		# For UNIX-like platforms.
@@ -74,10 +74,7 @@ else
 			LDFLAGS += -lGL
 		endif
 
-		# Assimp dependencies.
-		# We cannot use pkg-config at least on Mac because of this bug:
-		# https://github.com/Homebrew/homebrew-core/issues/47405
-		LDFLAGS += -lassimp
+		LDFLAGS += -lFColladaSD
 	endif
 endif
 

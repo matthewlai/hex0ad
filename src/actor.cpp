@@ -297,9 +297,8 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_te
 }
 
 void Actor::Render(RenderContext* context) {
-  //Render(context, glm::rotate(static_cast<float>(M_PI), glm::vec3(1.0f, 0.0f, 0.0f)));
-  Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::rotate(float(M_PI) / 2.0f, glm::vec3(1.0f, 0.0f, 0.0f)));
-  //Render(context, glm::mat4(1.0f));
+  //Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::rotate(float(M_PI) / 2.0f, glm::vec3(1.0f, 0.0f, 0.0f)));
+  Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)));
 }
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
@@ -362,7 +361,7 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
     return;
   }
 
-  RenderMesh(mesh_path, textures, context->vp, model * attachpoints["main_mesh"], context);
+  RenderMesh(mesh_path, textures, context->vp, model, context);
 
   attachpoints["root"] = glm::mat4(1.0f);
 
