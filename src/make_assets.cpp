@@ -49,19 +49,17 @@ using tinyxml2::XMLNode;
 
 namespace {
 static constexpr const char* kTestActorPaths[] = {
-    // "structures/britons/civic_centre.xml",
+    "structures/britons/civic_centre.xml",
 
     "structures/mauryas/fortress.xml",
-    // "structures/britons/fortress.xml",
-    // "structures/persians/fortress.xml",
-    // "structures/romans/fortress.xml",
-    // "structures/spartans/fortress.xml",
+    "structures/britons/fortress.xml",
+    "structures/persians/fortress.xml",
+    "structures/romans/fortress.xml",
+    "structures/spartans/fortress.xml",
 
-    // "structures/persians/stable.xml",
-    // "units/athenians/hero_infantry_javelinist_iphicrates.xml",
-    // "units/romans/hero_cavalry_swordsman_maximus_r.xml",
-
-    //"props/structures/persians/stable_horse_a.xml",
+    "structures/persians/stable.xml",
+    "units/athenians/hero_infantry_javelinist_iphicrates.xml",
+    "units/romans/hero_cavalry_swordsman_maximus_r.xml",
     };
 
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
@@ -440,6 +438,26 @@ IndexedVertexData Reindex(std::vector<VertexData>&& vds) {
   return ret;
 }
 
+struct AttachmentPoint {
+  std::string name;
+  FMMatrix44 transform;
+};
+
+void AddAttachmentPoints(FCDSceneNode* node, const FMMatrix44& up_transform,
+                         std::vector<AttachmentPoint>* attachment_points) {
+  if (node->GetName().find("prop-") == 0 || node->GetName().find("prop_") == 0) {
+    AttachmentPoint pt;
+    pt.name = node->GetName().substr(5);
+    LOG_DEBUG("Prop point % found", pt.name);
+    pt.transform = up_transform * node->CalculateWorldTransform();
+    attachment_points->push_back(std::move(pt));
+  }
+
+  for (std::size_t i = 0; i < node->GetChildrenCount(); ++i) {
+    AddAttachmentPoints(node->GetChild(i), up_transform, attachment_points);
+  }
+}
+
 }
 
 // See https://github.com/0ad/0ad/blob/master/source/collada/PMDConvert.cpp
@@ -465,7 +483,6 @@ void ParseMesh(const std::string& mesh_path) {
 
   FMVector3 up_axis = cdoc.Doc()->GetAsset()->GetUpAxis();
   bool yup = (up_axis.y != 0); // assume either Y_UP or Z_UP.
-  (void) yup;
 
   TransformedInstance t_instance = FindSingleInstance(root);
 
@@ -572,9 +589,8 @@ void ParseMesh(const std::string& mesh_path) {
     tex_coords[i * 2 + 1] = -vec[1];
   }
 
-  std::vector<float> ao_tex_coords;
+  std::vector<float> ao_tex_coords(ivd.vds.size() * 2, 0.0f);
   if (texcoords_data.size() >= 2) {
-    ao_tex_coords.resize(ivd.vds.size() * 2);
     for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
       float* vec = ivd.vds[i].UV1();
       ao_tex_coords[i * 2] = vec[0];
@@ -582,12 +598,33 @@ void ParseMesh(const std::string& mesh_path) {
     }
   }
 
+  std::vector<AttachmentPoint> attachment_points;
+
+  // We use z-up, so do a rotate if the model is y-up.
+  FMMatrix44 up_transform = FMMatrix44::Identity;
+  if (yup) {
+    up_transform = FMMatrix44::XAxisRotationMatrix(M_PI / 2.0f);
+  }
+
+  AttachmentPoint main_point;
+  main_point.name = "main_mesh";
+  main_point.transform = up_transform * t_instance.transform;
+
+  attachment_points.push_back(main_point);
+
+  AddAttachmentPoints(root, up_transform, &attachment_points);
+
   std::vector<std::string> attachment_point_names;
   std::vector<float> attachment_point_transforms;
 
-  for (int i = 0; i < 5; ++i) {
-    auto* v = &ivd.indices[0];
-    LOG_INFO("% % %", v[i * 3], v[i * 3 + 1], v[i * 3 + 2]);
+  for (const auto& [name, matrix] : attachment_points) {
+    attachment_point_names.push_back(name);
+
+    for (int row = 0; row < 4; ++row) {
+      for (int col = 0; col < 4; ++col) {
+        attachment_point_transforms.push_back(matrix[row][col]);
+      }
+    }
   }
 
   auto mesh_fb = data::CreateMesh(

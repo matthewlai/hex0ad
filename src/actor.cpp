@@ -361,27 +361,13 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
     return;
   }
 
-  RenderMesh(mesh_path, textures, context->vp, model, context);
-
   attachpoints["root"] = glm::mat4(1.0f);
+
+  RenderMesh(mesh_path, textures, context->vp, model * attachpoints["main_mesh"], context);
 
   for (auto& [point, actor_templates] : props) {
     for (auto& actor_template : actor_templates) {
       auto it = attachpoints.find(point);
-      if (it == attachpoints.end()) {
-        it = attachpoints.find(std::string("prop_") + point);
-      }
-      
-      if (it == attachpoints.end()) {
-        it = attachpoints.find(std::string("Biped_") + point);
-      }
-      
-      if (it == attachpoints.end()) {
-        it = attachpoints.find(std::string("Biped_prop_") + point);
-      }
-      if (it == attachpoints.end()) {
-        it = attachpoints.find(std::string("Biped_prop-") + point);
-      }
 
       if (it != attachpoints.end()) {
         glm::mat4 prop_model = model * it->second;
