@@ -130,6 +130,7 @@ bool main_loop() {
         case SDLK_ESCAPE:
           quit = true;
           break;
+#ifndef __EMSCRIPTEN__
         case SDLK_f:
           g_state.fullscreen ^= 1;
           if (g_state.fullscreen) {
@@ -137,6 +138,7 @@ bool main_loop() {
           } else {
             SDL_SetWindowFullscreen(g_state.window, 0);
           }
+#endif
         default:
           // Unknown key.
           break;
@@ -175,7 +177,11 @@ void DeInitSDL() {
 }
 
 int main(int /*argc*/, char** /*argv*/) {
-  logger.LogToStdErrLevel(Logger::eLevel::INFO);
+  logger.LogToStdErrLevel(Logger::eLevel::WARN);
+
+  #ifdef __EMSCRIPTEN__
+  logger.LogToStdOutLevel(Logger::eLevel::INFO);
+  #endif
 
   #ifdef __EMSCRIPTEN__
   int have_webgl2 = emscripten_run_script_int(R""(

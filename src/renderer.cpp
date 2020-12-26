@@ -83,10 +83,15 @@ void Renderer::RenderFrameBegin() {
   //  an entire frame period), this is when the buffer swap happens.
   render_context_.frame_start_time = GetTimeUs();
 
+#ifdef __EMSCRIPTEN__
+  int window_width = EM_ASM_INT({ return document.getElementById('canvas').width; });
+  int window_height = EM_ASM_INT({ return document.getElementById('canvas').height; });
+#else
   SDL_Window* window = SDL_GL_GetCurrentWindow();
   int window_width;
   int window_height;
   SDL_GL_GetDrawableSize(window, &window_width, &window_height);
+#endif
 
   glViewport(0, 0, window_width, window_height);
 
@@ -113,9 +118,16 @@ void Renderer::RenderFrameBegin() {
   glm::mat4 view = glm::lookAt(render_context_.eye_pos, glm::vec3(0.0f, 0.0f, 5.0f),
     glm::vec3(0.0f, 0.0f, 1.0f));
 
-  glm::mat4 projection = glm::perspective(glm::radians(90.0f),
-    static_cast<float>(window_width) / window_height,
-    near_z, far_z);
+  glm::mat4 projection;
+
+  if (window_width > 0 && window_height > 0) {
+    projection = glm::perspective(glm::radians(90.0f),
+      static_cast<float>(window_width) / window_height,
+      near_z, far_z);
+  } else {
+    projection = glm::perspective(glm::radians(90.0f), 1.0f, near_z, far_z);
+    LOG_ERROR("Invalid window size: % %", window_width, window_height);
+  }
 
   render_context_.vp = projection * view;
 

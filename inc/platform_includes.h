@@ -22,7 +22,14 @@
 #include <SDL_opengl.h>
 #include <SDL_opengl_glext.h>
 #elif !defined(_WIN32)
+// This seems to bring in GLES3 on other platforms?
 #include <SDL_opengles2.h>
+#endif
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+
+#include <GLES3/gl31.h>
 #endif
 
 // We target OpenGL 4.1 on Mac because ES is not supported.
