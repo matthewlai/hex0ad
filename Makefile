@@ -110,10 +110,10 @@ dep/%.d: %.cpp $(FLATBUFFER_GENERATED_FILES)
 obj/%.o: %.cpp $(FLATBUFFER_GENERATED_FILES)
 	$(Q) $(CXX) $(CXXFLAGS) $(INCLUDES) -c $(@:obj/%.o=%.cpp) -o $@
 
-bin/make_assets: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o
+bin/make_assets bin/make_assets.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o -o $@ $(LDFLAGS)
 
-bin/hex0ad: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
+bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o -o $@ $(LDFLAGS)
 	
 clean:
