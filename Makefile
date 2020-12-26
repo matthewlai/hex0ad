@@ -18,6 +18,10 @@ endif
 # All binaries.
 BINS=bin/hex0ad bin/make_assets
 
+ifeq ($(OS),Windows_NT)
+	BINS := $(BINS:%=%.exe)
+endif
+
 WEB_BIN=hex0ad
 
 CXXFILES := $(wildcard src/*.cpp)
