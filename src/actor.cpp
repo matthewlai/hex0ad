@@ -61,7 +61,6 @@ struct TextureSet {
 void BindTexture(const std::string& texture_name, GLenum texture_unit) {
   static std::map<std::string, GLuint> texture_cache;
   glActiveTexture(texture_unit);
-  CHECK_GL_ERROR;
   auto it = texture_cache.find(texture_name);
   if (it == texture_cache.end()) {
     GLuint texture_id;
@@ -97,7 +96,6 @@ void BindTexture(const std::string& texture_name, GLenum texture_unit) {
     glGenerateMipmap(GL_TEXTURE_2D);
   } else {
     glBindTexture(GL_TEXTURE_2D, it->second);
-    CHECK_GL_ERROR;
   }
 }
 
@@ -116,11 +114,8 @@ GLuint MakeAndUploadVBO(GLenum binding_target, BufT* buf) {
 
 void UseVBO(GLenum binding_target, int attrib_location, GLenum gl_type, int components_per_element, GLuint vbo_id) {
   glEnableVertexAttribArray(attrib_location);
-  CHECK_GL_ERROR
   glBindBuffer(binding_target, vbo_id);
-  CHECK_GL_ERROR
   glVertexAttribPointer(attrib_location, components_per_element, gl_type, GL_FALSE, 0, (const void*) 0);
-  CHECK_GL_ERROR
 }
 
 std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_name) {
