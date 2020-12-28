@@ -31,7 +31,6 @@ TestTriangleRenderable::TestTriangleRenderable() {
   };
 
   simple_shader_ = GetShader("shaders/simple.vs", "shaders/simple.fs");
-  simple_shader_mvp_loc_ = simple_shader_->GetUniformLocation("mvp"_name);
   glGenBuffers(1, &vertices_vbo_id_);
   glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);
   glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 3 * 3, vertices, GL_STATIC_DRAW);
@@ -50,9 +49,10 @@ void TestTriangleRenderable::Render(RenderContext* context) {
   glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(float(context->frame_counter % 360)),
     glm::vec3(0.0f, 1.0f, 0.0f));
   glm::mat4 mvp = context->projection * context->view * model;
-  glUniformMatrix4fv(simple_shader_mvp_loc_, 1, GL_FALSE, glm::value_ptr(mvp));
 
   simple_shader_->Activate();
+  simple_shader_->SetUniform("mvp"_name, mvp);
+
   glEnableVertexAttribArray(0);
 
   glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);

@@ -48,7 +48,6 @@ class TestTriangleRenderable : public Renderable {
 
  private:
   ShaderProgram* simple_shader_;
-  GLint simple_shader_mvp_loc_;
   GLuint vertices_vbo_id_;
   GLuint indices_vbo_id_;
 };

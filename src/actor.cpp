@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "glm/gtc/matrix_inverse.hpp"
-#include "glm/gtc/type_ptr.hpp"
 #include "glm/gtx/string_cast.hpp"
 #include "glm/gtx/transform.hpp"
 
@@ -22,22 +21,6 @@ static constexpr const char* kMeshPathPrefix = "assets/art/meshes/";
 // Data about a mesh that has been uploaded to the GPU (used at least once).
 struct MeshGPUData {
   ShaderProgram* shader;
-
-  GLint mvp_loc;
-  GLint model_loc;
-  GLint normal_matrix_loc;
-  GLint base_tex_loc;
-  GLint norm_tex_loc;
-  GLint spec_tex_loc;
-  GLint ao_tex_loc;
-
-  GLint light_pos_loc;
-  GLint player_colour_loc;
-  GLint eye_pos_loc;
-
-  #define GraphicsSetting(upper, lower, type, default, toggle_key) GLint lower ## _loc;
-  GRAPHICS_SETTINGS
-  #undef GraphicsSetting
 
   GLuint vertices_vbo_id;
   GLuint normals_vbo_id;
@@ -91,22 +74,6 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     MeshGPUData data;
     data.shader = GetShader("shaders/actor.vs", "shaders/actor.fs");
     data.shader->Activate();
-    data.mvp_loc = data.shader->GetUniformLocation("mvp"_name);
-    data.normal_matrix_loc = data.shader->GetUniformLocation("normal_matrix"_name);
-    data.model_loc = data.shader->GetUniformLocation("model"_name);
-    data.player_colour_loc = data.shader->GetUniformLocation("player_colour"_name);
-    data.light_pos_loc = data.shader->GetUniformLocation("light_pos"_name);
-    data.eye_pos_loc = data.shader->GetUniformLocation("eye_pos"_name);
-
-    data.base_tex_loc = data.shader->GetUniformLocation("base_texture"_name);
-    data.norm_tex_loc = data.shader->GetUniformLocation("norm_texture"_name);
-    data.spec_tex_loc = data.shader->GetUniformLocation("spec_texture"_name);
-    data.ao_tex_loc = data.shader->GetUniformLocation("ao_texture"_name);
-
-    #define GraphicsSetting(upper, lower, type, default, toggle_key) \
-      data.lower ## _loc = data.shader->GetUniformLocation(NameLiteral(#lower));
-    GRAPHICS_SETTINGS
-    #undef GraphicsSetting
 
     // Upload all the vertex attributes to the GPU.
     data.vertices_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->vertices());
@@ -125,23 +92,20 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   data.shader->Activate();
 
   glm::mat4 mvp = vp * model;
-  glUniformMatrix4fv(data.mvp_loc, 1, GL_FALSE, glm::value_ptr(mvp));
-
-  glUniformMatrix4fv(data.model_loc, 1, GL_FALSE, glm::value_ptr(model));
+  data.shader->SetUniform("mvp"_name, mvp);
+  data.shader->SetUniform("model"_name, model);
 
   glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
-  glUniformMatrix3fv(data.normal_matrix_loc, 1, GL_FALSE, glm::value_ptr(normal_matrix));
+  data.shader->SetUniform("normal_matrix"_name, normal_matrix);
 
   glm::vec3 player_colour(0.0f, 0.0f, 1.0f);
-  glUniform3fv(data.player_colour_loc, 1, glm::value_ptr(player_colour));
-
-  glUniform3fv(data.light_pos_loc, 1, glm::value_ptr(context->light_pos));
-
-  glUniform3fv(data.eye_pos_loc, 1, glm::value_ptr(context->eye_pos));
+  data.shader->SetUniform("player_colour"_name, player_colour);
+  data.shader->SetUniform("light_pos"_name, context->light_pos);
+  data.shader->SetUniform("eye_pos"_name, context->eye_pos);
 
   // Graphics settings.
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
-    glUniform1i(data.lower ## _loc, context->lower);
+    data.shader->SetUniform(NameLiteral(#lower), context->lower);
   GRAPHICS_SETTINGS
   #undef GraphicsSetting
 
@@ -157,27 +121,27 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   if (!textures.norm_texture.empty()) {
     TextureManager::GetInstance()->BindTexture(textures.norm_texture, GL_TEXTURE1);
   } else {
-    glUniform1i(data.use_normal_map_loc, 0);
+    data.shader->SetUniform("use_normal_map"_name, 0);
   }
 
   // Texture unit 2 for the spec texture
   if (!textures.spec_texture.empty()) {
     TextureManager::GetInstance()->BindTexture(textures.spec_texture, GL_TEXTURE2);
   } else {
-    glUniform1i(data.use_specular_highlight_loc, 0);
+    data.shader->SetUniform("use_specular_highlight"_name, 0);
   }
 
   // Texture unit 3 for the spec texture
   if (!textures.ao_texture.empty()) {
     TextureManager::GetInstance()->BindTexture(textures.ao_texture, GL_TEXTURE3);
   } else {
-    glUniform1i(data.use_ao_map_loc, 0);
+    data.shader->SetUniform("use_ao_map"_name, 0);
   }
 
-  glUniform1i(data.base_tex_loc, 0);
-  glUniform1i(data.norm_tex_loc, 1);
-  glUniform1i(data.spec_tex_loc, 2);
-  glUniform1i(data.ao_tex_loc, 3);
+  data.shader->SetUniform("base_texture"_name, 0);
+  data.shader->SetUniform("norm_texture"_name, 1);
+  data.shader->SetUniform("spec_texture"_name, 2);
+  data.shader->SetUniform("ao_texture"_name, 3);
 
   UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
   UseVBO(GL_ARRAY_BUFFER, 1, GL_FLOAT, 3, data.normals_vbo_id);

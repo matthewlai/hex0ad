@@ -24,8 +24,6 @@ class Terrain : public Renderable {
   GLuint edges_vertices_vbo_id_;
   GLuint edges_indices_vbo_id_;
   std::size_t edges_num_indices_;
-  GLint mvp_loc_;
-  GLint is_edge_loc_;
 
   bool render_ground_;
 };

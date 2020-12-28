@@ -14,35 +14,6 @@ constexpr static float kGridSize = 5.0f;
 constexpr static float kHexRingOffset = kGridSize * 0.05f;
 constexpr static int kMapSize = 15;
 
-/*
-struct PatchData {
-  GLint mvp_loc;
-  GLint model_loc;
-  GLint normal_matrix_loc;
-  GLint base_tex_loc;
-  GLint norm_tex_loc;
-  GLint spec_tex_loc;
-  GLint ao_tex_loc;
-
-  GLint light_pos_loc;
-  GLint player_colour_loc;
-  GLint eye_pos_loc;
-
-  #define GraphicsSetting(upper, lower, type, default, toggle_key) GLint lower ## _loc;
-  GRAPHICS_SETTINGS
-  #undef GraphicsSetting
-
-  GLuint vertices_vbo_id;
-  GLuint normals_vbo_id;
-  GLuint tangents_vbo_id;
-  GLuint tex_coords_vbo_id;
-  GLuint ao_tex_coords_vbo_id;
-
-  GLuint indices_vbo_id;
-  GLsizei num_indices;
-};
-*/
-
 void DrawHex(const Hex& hex, std::vector<float>* positions, std::vector<GLuint>* indices) {
   GLuint base_index = positions->size() / 3;
 
@@ -153,8 +124,6 @@ Terrain::Terrain() :
     edges_vertices_vbo_id_(0),
     edges_indices_vbo_id_(0),
     edges_num_indices_(0),
-    mvp_loc_(0),
-    is_edge_loc_(0),
     render_ground_(true) {}
 
 void Terrain::Render(RenderContext* context) {
@@ -188,23 +157,19 @@ void Terrain::Render(RenderContext* context) {
     shader_ = GetShader("shaders/terrain.vs", "shaders/terrain.fs");
     shader_->Activate();
 
-    mvp_loc_ = shader_->GetUniformLocation("mvp"_name);
-    is_edge_loc_ = shader_->GetUniformLocation("is_edge"_name);
-
     initialized_ = true;
   }
 
   shader_->Activate();
 
   glm::mat4 mvp = context->projection * context->view;
-  glUniformMatrix4fv(mvp_loc_, 1, GL_FALSE, glm::value_ptr(mvp));
-
-  glUniform1i(is_edge_loc_, 0);
+  shader_->SetUniform("mvp"_name, mvp);
+  shader_->SetUniform("is_edge"_name, 0);
   UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, vertices_vbo_id_);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);
   glDrawElements(GL_TRIANGLES, num_indices_, GL_UNSIGNED_INT, (const void*) 0);
 
-  glUniform1i(is_edge_loc_, 1);
+  shader_->SetUniform("is_edge"_name, 1);
   UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, edges_vertices_vbo_id_);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, edges_indices_vbo_id_);
   glDrawElements(GL_TRIANGLES, edges_num_indices_, GL_UNSIGNED_INT, (const void*) 0);
