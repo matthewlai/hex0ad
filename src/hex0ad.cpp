@@ -13,6 +13,7 @@
 #include "actor.h"
 #include "logger.h"
 #include "renderer.h"
+#include "terrain.h"
 #include "utils.h"
 
 namespace {
@@ -23,7 +24,10 @@ struct ProgramState {
   SDL_Window* window;
   bool fullscreen = false;
   std::unique_ptr<Renderer> renderer;
+  std::unique_ptr<Terrain> terrain;
   std::vector<Actor> actors;
+  int32_t last_mouse_x;
+  int32_t last_mouse_y;
 } g_state;
 
 SDL_GLContext InitSDL() {
@@ -127,6 +131,9 @@ bool main_loop() {
           break;
         GRAPHICS_SETTINGS
         #undef GraphicsSetting
+        case SDLK_g:
+          g_state.terrain->ToggleRenderGround();
+          break;
         case SDLK_ESCAPE:
           quit = true;
           break;
@@ -148,10 +155,33 @@ bool main_loop() {
         LOG_INFO("Window resized to %x%", e.window.data1, e.window.data2);
         SDL_SetWindowSize(g_state.window, e.window.data1, e.window.data2);
       }
+    } else if (e.type == SDL_MOUSEMOTION) {
+      if (e.motion.state & SDL_BUTTON_LMASK) {
+        g_state.renderer->AddAzimuth(e.motion.xrel * 0.1f);
+        g_state.renderer->AddElevation(e.motion.yrel * 0.1f);
+      } else if (e.motion.state & SDL_BUTTON_RMASK) {
+        g_state.renderer->MoveCamera(e.motion.x - e.motion.xrel,
+                                     e.motion.y - e.motion.yrel,
+                                     e.motion.x, e.motion.y);
+      }
+    } else if (e.type == SDL_MOUSEWHEEL) {
+      int scroll_amount = e.wheel.y;
+      if (e.wheel.direction == SDL_MOUSEWHEEL_NORMAL) {
+        scroll_amount *= -1;
+      }
+
+      // Portable mousewheel handling is hard on emscripten:
+      // https://github.com/emscripten-core/emscripten/issues/6283
+      // We just use 1 instead, which seems to work fine.
+      scroll_amount = (scroll_amount > 0) ? 1 : -1;
+
+      g_state.renderer->AddDistance(scroll_amount * 0.2f);
     }
   }
 
   g_state.renderer->RenderFrameBegin();
+
+  g_state.renderer->Render(g_state.terrain.get());
 
   for (auto& actor : g_state.actors) {
     g_state.renderer->Render(&actor);
@@ -178,10 +208,7 @@ void DeInitSDL() {
 
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdErrLevel(Logger::eLevel::WARN);
-
-  #ifdef __EMSCRIPTEN__
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
-  #endif
 
   #ifdef __EMSCRIPTEN__
   int have_webgl2 = emscripten_run_script_int(R""(
@@ -203,9 +230,10 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.renderer = std::make_unique<Renderer>();
 
+  g_state.terrain = std::make_unique<Terrain>();
+
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/mauryas/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/stable.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/mauryas/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/romans/fortress.fb").MakeActor());
@@ -219,7 +247,7 @@ int main(int /*argc*/, char** /*argv*/) {
 
   for (std::size_t i = 0; i < g_state.actors.size(); ++i) {
     float arg = 2.0f * M_PI / g_state.actors.size() * i;
-    float dist = 70.0f;
+    float dist = 35.0f;
     glm::vec3 position(dist * cos(arg), dist * sin(arg), 0.0f);
     g_state.actors[i].SetPosition(position);
   }

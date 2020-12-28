@@ -1,5 +1,7 @@
 #include "renderer.h"
 
+#include "flatbuffers/flatbuffers.h"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
@@ -11,6 +13,14 @@
 #include <cstddef>
 #include <iostream>
 
+namespace {
+constexpr static float kFov = 60.0f;
+constexpr static float kDefaultEyeDistance = 70.0f;
+constexpr static float kDefaultEyeAzimuth = 0.0f;
+constexpr static float kDefaultEyeElevation = 45.0f;
+constexpr static float kZoomSpeed = 0.1f;
+}
+
 TestTriangleRenderable::TestTriangleRenderable() {
   const static GLfloat vertices[] = { 0.0f, 1.0f, 0.0f,
                                       0.0f, 0.0f, 1.0f,
@@ -21,7 +31,7 @@ TestTriangleRenderable::TestTriangleRenderable() {
   };
 
   simple_shader_ = GetShader("shaders/simple.vs", "shaders/simple.fs");
-  simple_shader_mvp_loc_ = simple_shader_->GetUniformLocation("mvp");
+  simple_shader_mvp_loc_ = simple_shader_->GetUniformLocation("mvp"_name);
   glGenBuffers(1, &vertices_vbo_id_);
   glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);
   glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 3 * 3, vertices, GL_STATIC_DRAW);
@@ -39,7 +49,7 @@ TestTriangleRenderable::~TestTriangleRenderable() {
 void TestTriangleRenderable::Render(RenderContext* context) {
   glm::mat4 model = glm::rotate(glm::mat4(1.0f), glm::radians(float(context->frame_counter % 360)),
     glm::vec3(0.0f, 1.0f, 0.0f));
-  glm::mat4 mvp = context->vp * model;
+  glm::mat4 mvp = context->projection * context->view * model;
   glUniformMatrix4fv(simple_shader_mvp_loc_, 1, GL_FALSE, glm::value_ptr(mvp));
 
   simple_shader_->Activate();
@@ -69,6 +79,14 @@ Renderer::Renderer() {
   glGenVertexArrays(1, &vao);
   glBindVertexArray(vao); 
   #endif
+
+  eye_azimuth_ = kDefaultEyeAzimuth;
+  eye_elevation_ = kDefaultEyeElevation;
+  eye_distance_ = kDefaultEyeDistance;
+
+  eye_distance_target_ = kDefaultEyeDistance;
+
+  view_centre_ = glm::vec3(0.0, 0.0, 0.0);
 }
 
 void Renderer::RenderFrameBegin() {
@@ -94,46 +112,36 @@ void Renderer::RenderFrameBegin() {
 #endif
 
   glViewport(0, 0, window_width, window_height);
+  render_context_.window_width = window_width;
+  render_context_.window_height = window_height;
 
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
   glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  double camera_angle_rad = render_context_.frame_start_time / 3000000.0;
+  float eye_avimuth_rad = eye_azimuth_ * M_PI / 180.0f;
+  float eye_elevation_rad = eye_elevation_ * M_PI / 180.0f;
 
-  float eye_x = 30.0f * sin(camera_angle_rad);
-  float eye_y = 30.0f * cos(camera_angle_rad);
+  eye_distance_ += (eye_distance_target_ - eye_distance_) * kZoomSpeed;
 
-  render_context_.eye_pos = glm::vec3(eye_x, eye_y, 20.0f);
+  render_context_.eye_pos = view_centre_ + glm::normalize(
+      glm::vec3(sin(eye_avimuth_rad), cos(eye_avimuth_rad), tan(eye_elevation_rad))) * eye_distance_;
 
-  //float distance_ratio = 3.0f;
-  float distance_ratio = 3.0f;
+  glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
 
-  render_context_.eye_pos *= distance_ratio;
+  float near_z = 0.1f * eye_distance_;
+  float far_z = 10.0f * eye_distance_;
+  glm::mat4 projection = glm::perspective(glm::radians(kFov),
+    static_cast<float>(window_width) / window_height,
+    near_z, far_z);
 
-  float near_z = 1.0f * distance_ratio;
-  float far_z = 100.0f * distance_ratio;
-
-  glm::mat4 view = glm::lookAt(render_context_.eye_pos, glm::vec3(0.0f, 0.0f, 5.0f),
-    glm::vec3(0.0f, 0.0f, 1.0f));
-
-  glm::mat4 projection;
-
-  if (window_width > 0 && window_height > 0) {
-    projection = glm::perspective(glm::radians(90.0f),
-      static_cast<float>(window_width) / window_height,
-      near_z, far_z);
-  } else {
-    projection = glm::perspective(glm::radians(90.0f), 1.0f, near_z, far_z);
-    LOG_ERROR("Invalid window size: % %", window_width, window_height);
-  }
-
-  render_context_.vp = projection * view;
+  render_context_.view = view;
+  render_context_.projection = projection;
 
   // Put the light 45 degrees from eye.
-  render_context_.light_pos = glm::vec3(30.0f * sin(camera_angle_rad + M_PI / 4.0f),
-                                        30.0f * cos(camera_angle_rad + M_PI / 4.0f), 7.0f) * distance_ratio;
+  render_context_.light_pos = glm::normalize(
+      glm::vec3(sin(eye_avimuth_rad + M_PI / 4.0f), cos(eye_avimuth_rad + M_PI / 4.0f), 0.25f)) * eye_distance_;
 }
 
 void Renderer::Render(Renderable* renderable) {
@@ -160,4 +168,29 @@ void Renderer::RenderFrameEnd() {
     last_stat_time_us_ = render_context_.frame_start_time;
   }
   render_context_.last_frame_time_us = render_context_.frame_start_time;
+}
+
+void Renderer::MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t y_to) {
+  glm::vec3 from = UnProjectToXY(x_from, y_from);
+  glm::vec3 to = UnProjectToXY(x_to, y_to);
+  auto diff = from - to;
+  view_centre_ += diff;
+  view_centre_.z = 0;
+}
+
+glm::vec3 Renderer::UnProjectToXY(int32_t x, int32_t y) {
+  // First we need two points to create the ray corresponding to (x, y) on screen. We need two points for that.
+  // For the first point we unproject from an arbitrary depth = 1. The second point is the camera position.
+  glm::vec3 point0 = glm::unProject(
+      glm::vec3(x, render_context_.window_height - y, 1.0), render_context_.view, render_context_.projection,
+      glm::vec4(0.0f, 0.0f, render_context_.window_width, render_context_.window_height));
+  glm::vec3 point1 = render_context_.eye_pos;
+
+  glm::vec3 dir = glm::normalize(point1 - point0);
+
+  // Then we are just looking for where the camera -> point ray intersects z = 0.
+  // point0.z + c * dir.z = 0
+  // c = -point0.z / dir.z
+  // point0 + c * dir = vec3(x, y, 0)
+  return point0 + (-point0.z / dir.z) * dir;
 }
