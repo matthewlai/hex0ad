@@ -5,8 +5,8 @@
 #include <string>
 
 #include "logger.h"
-
 #include "platform_includes.h"
+#include "utils.h"
 
 class ShaderProgram {
  public:
@@ -15,7 +15,7 @@ class ShaderProgram {
 
   void Activate() { glUseProgram(program_); }
 
-  GLint GetUniformLocation(const std::string& name);
+  GLint GetUniformLocation(const NameLiteral& name);
 
   ~ShaderProgram();
  private:
@@ -24,6 +24,8 @@ class ShaderProgram {
   GLuint vertex_shader_;
   GLuint fragment_shader_;
   GLuint program_;
+
+  LinearCache<NameLiteral, GLint> uniform_locations_cache_;
 };
 
 // Get a pointer to a ShaderProgram built from the specified
