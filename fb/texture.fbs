@@ -1,0 +1,6 @@
+namespace data;
+
+table Texture {
+  name:string;
+  file:string;
+}

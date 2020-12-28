@@ -1,3 +1,5 @@
+include "texture.fbs";
+
 namespace data;
 
 // A prop with no actor means the prop at the attachpoint should be
@@ -6,11 +8,6 @@ namespace data;
 table Prop {
   actor:string;
   attachpoint:string;
-}
-
-table Texture {
-  name:string;
-  file:string;
 }
 
 // Variants with frequency > 0 may be randomly selected.
