@@ -26,6 +26,12 @@ Tile-based strategy game using 0ad assets
 	* `cmake -G "MinGW Makefiles" -DCMAKE_INSTALL_PREFIX=build .`
 	* Build with `make MAKE="make -j 24" && make install` (or as appropriate for how many CPU cores you have)
 	* Copy build/include, lib, and bin to [MinGW installation directory]/x86_64-w64-mingw32
+* libimagequant for optimizing PNG textures (https://github.com/ImageOptim/libimagequant)
+	* `git clone https://github.com/ImageOptim/libimagequant.git`
+	* `cd libimagequant`
+	* `make static` (may have to run twice)
+	* Copy libimagequant.a to [MinGW installation directory]/x86_64-w64-mingw32/lib
+	* Copy [all].h to  [MinGW installation directory]/x86_64-w64-mingw32/include
 
 ## Download and convert 0ad Assets (All Platforms)
 * Download https://0adassets.s3-us-west-2.amazonaws.com/assets.7z, and extract into 0ad_assets, so you should end up with:

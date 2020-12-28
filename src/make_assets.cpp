@@ -1,3 +1,4 @@
+#include <atomic>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -7,6 +8,7 @@
 #include <stack>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "logger.h"
@@ -26,6 +28,7 @@
 
 #include "lodepng/lodepng.h"
 #include "tinyxml2/tinyxml2.h"
+#include "libimagequant.h"
 
 // Include order is important because FCollada headers have a lot of missing includes.
 #include <FCollada.h>
@@ -74,6 +77,7 @@ static constexpr const char* kVariantPathPrefix = "art/variants/";
 class DoneTracker {
  public:
   bool ShouldSkip(const std::string& s) {
+    std::lock_guard<std::mutex> guard(mutex_);
     if (done_set_.find(s) != done_set_.end()) {
       return true;
     } else {
@@ -83,6 +87,7 @@ class DoneTracker {
   }
 
  private:
+  std::mutex mutex_;
   std::set<std::string> done_set_;
 };
 
@@ -458,6 +463,48 @@ void AddAttachmentPoints(FCDSceneNode* node, const FMMatrix44& up_transform,
   }
 }
 
+void WriteImageOpt(const std::string& output_path, const std::vector<uint8_t>& uncompressed, int width, int height) {
+  std::vector<uint8_t> png_data;
+
+  liq_attr* handle = liq_attr_create();
+  liq_image* input_image = liq_image_create_rgba(handle, uncompressed.data(), width, height, 0);
+  liq_result* quantization_result;
+  if (liq_image_quantize(input_image, handle, &quantization_result) != LIQ_OK) {
+    LOG_ERROR("Failed to quantize %", output_path);
+    return;
+  }
+
+  std::vector<uint8_t> raw_8bit_pixels(width * height);
+  liq_set_dithering_level(quantization_result, 0.0);
+  liq_set_quality(handle, 0, 80);
+  liq_write_remapped_image(quantization_result, input_image, &raw_8bit_pixels[0], width * height);
+
+  const liq_palette* palette = liq_get_palette(quantization_result);
+
+  lodepng::State state;
+  state.info_raw.colortype = LCT_PALETTE;
+  state.info_raw.bitdepth = 8;
+  state.info_png.color.colortype = LCT_PALETTE;
+  state.info_png.color.bitdepth = 8;
+
+  for (std::size_t i = 0; i < palette->count; ++i) {
+    lodepng_palette_add(&state.info_png.color, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+    lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
+  }
+
+  uint32_t error = lodepng::encode(
+      png_data, reinterpret_cast<const uint8_t*>(raw_8bit_pixels.data()), width, height, state);
+  if (error) {
+    LOG_ERROR("Failed to encode PNG: %", lodepng_error_text(error));
+    return;
+  }
+  WriteToFile(output_path, png_data.data(), png_data.size());
+
+  liq_result_destroy(quantization_result);
+  liq_image_destroy(input_image);
+  liq_attr_destroy(handle);
+}
+
 }
 
 // See https://github.com/0ad/0ad/blob/master/source/collada/PMDConvert.cpp
@@ -644,50 +691,54 @@ void ParseMesh(const std::string& mesh_path) {
               builder.GetBufferPointer(), builder.GetSize());
 }
 
-void SaveTexture(const std::string& texture_path) {
-  static DoneTracker done_tracker;
-  if (done_tracker.ShouldSkip(texture_path)) {
-    return;
-  }
+// Texture saving is slow. We save them in other threads in parallel.
+std::mutex g_textures_to_save_mutex;
+std::set<std::string> g_textures_to_save;
+bool g_textures_to_save_all_queued = false;
+
+void SaveTextureImpl(const std::string& texture_path) {
   std::string full_path = std::string(kInputPrefix) + kTexturePathPrefix + texture_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
-  LOG_INFO("Saving texture % at %", texture_path, full_path);
   std::ifstream is(full_path);
   auto file_content = ReadWholeFile(full_path);
   std::string old_extension = Extension(texture_path);
   std::string output_path =
       std::string(kOutputPrefix) + kTexturePathPrefix + RemoveExtension(texture_path) + ".png";
-  if (old_extension == "png") {
-    WriteToFile(output_path, file_content.data(), file_content.size());
-  } else if (old_extension == "dds") {
-    gli::texture texture_load = gli::load(full_path);
-    if (texture_load.empty()) {
-      LOG_ERROR("Failed to load DDS texture: %", full_path);
-      return;
-    }
-    if (texture_load.target() != gli::TARGET_2D) {
-      LOG_ERROR("Unknown texture target: %", texture_load.target());
-      return;
-    }
-    gli::texture2d texture = gli::texture2d(texture_load);
-    gli::fsampler2D read_sampler(texture, gli::WRAP_CLAMP_TO_EDGE);
+  if (old_extension == "png" || old_extension == "dds") {
+    // RGBA uncompressed data.
     std::vector<uint8_t> uncompressed;
-    for (int y = 0; y < texture.extent().y; ++y) {
-      for (int x = 0; x < texture.extent().x; ++x) {
-        glm::vec4 data = read_sampler.texel_fetch(gli::texture2d::extent_type(x, y), 0);
-        for (int p = 0; p < 4; ++p) {
-          uncompressed.push_back(data[p] * 255);
+    uint32_t width, height;
+    if (old_extension == "png") {
+      // Re-encode and optimize PNG files.
+      uint32_t error = lodepng::decode(uncompressed, width, height, file_content);
+      if (error) {
+        LOG_ERROR("Failed to decode PNG file %: %", full_path, lodepng_error_text(error));
+        return;
+      }
+    } else if (old_extension == "dds") {
+      gli::texture texture_load = gli::load(full_path);
+      if (texture_load.empty()) {
+        LOG_ERROR("Failed to load DDS texture: %", full_path);
+        return;
+      }
+      if (texture_load.target() != gli::TARGET_2D) {
+        LOG_ERROR("Unknown texture target: %", texture_load.target());
+        return;
+      }
+      gli::texture2d texture = gli::texture2d(texture_load);
+      gli::fsampler2D read_sampler(texture, gli::WRAP_CLAMP_TO_EDGE);
+      for (int y = 0; y < texture.extent().y; ++y) {
+        for (int x = 0; x < texture.extent().x; ++x) {
+          glm::vec4 data = read_sampler.texel_fetch(gli::texture2d::extent_type(x, y), 0);
+          for (int p = 0; p < 4; ++p) {
+            uncompressed.push_back(data[p] * 255);
+          }
         }
       }
+      width = texture.extent().x;
+      height = texture.extent().y;
     }
-    std::vector<uint8_t> png_data;
-    uint32_t error = lodepng::encode(
-        png_data, reinterpret_cast<const uint8_t*>(uncompressed.data()), texture.extent().x, texture.extent().y);
-    if (error) {
-      LOG_ERROR("Failed to encode PNG: %", lodepng_error_text(error));
-      return;
-    }
-    WriteToFile(output_path, png_data.data(), png_data.size());
+    WriteImageOpt(output_path, uncompressed, width, height);
   } else {
     LOG_ERROR("Unknown texture extension: %", old_extension);
     return;
@@ -762,7 +813,11 @@ void MakeActor(const std::string& actor_path) {
         for (auto& texture : textures) {
           std::string texture_name = texture.ToElement()->Attribute("name");
           std::string texture_file = texture.ToElement()->Attribute("file");
-          SaveTexture(texture_file);
+          {
+            std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
+            g_textures_to_save.insert(texture_file);
+          }
+          LOG_INFO("Enqueued texture %", texture_file);
           texture_offsets.push_back(data::CreateTexture(
               builder,
               /*name=*/builder.CreateString(texture_name),
@@ -827,10 +882,51 @@ void MakeActor(const std::string& actor_path) {
 
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
+  auto start_time = GetTimeUs();
   FCollada::Initialize();
+
+  unsigned threads_to_use = std::thread::hardware_concurrency();
+  if (threads_to_use <= 1) {
+    threads_to_use = 1;
+  } else {
+    threads_to_use -= 1;
+  }
+
+  auto worker_fn = [&]() {
+    while (true) {
+      std::string path;
+      {
+        std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
+        if (!g_textures_to_save.empty()) {
+          path = *g_textures_to_save.begin();
+          g_textures_to_save.erase(g_textures_to_save.begin());
+        } else {
+          if (g_textures_to_save_all_queued) {
+            break;
+          }
+        }
+      }
+      if (!path.empty()) {
+        SaveTextureImpl(path);
+      }
+    }
+  };
+
+  std::vector<std::thread> texture_workers;
+  for (unsigned int i = 0; i < threads_to_use; ++i) {
+    texture_workers.push_back(std::thread(worker_fn));
+  }
+
   for (const auto& path : kTestActorPaths) {
     MakeActor(path);
   }
+  g_textures_to_save_all_queued = true;
+
+  for (auto& t : texture_workers) {
+    t.join();
+  }
+
   FCollada::Release();
+  LOG_INFO("Took % seconds", (GetTimeUs() - start_time) / 1000000.0f);
   return 0;
 }

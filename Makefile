@@ -38,7 +38,19 @@ CXXFILES := $(wildcard src/*.cpp)
 CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 CXXFILES += third_party/lodepng/lodepng.cpp
 
+# We don't actually support C, so treat libimagequant differently.
+# CFLAGS are copied from the official Makefile. We can use SSE here because this will not be built for the game
+# itself.
+IMAGEQUANT_CC = gcc
+IMAGEQUANT_CFILES := $(wildcard third_party/libimagequant/*.c)
+IMAGEQUANT_OBJS := $(IMAGEQUANT_CFILES:%.c=obj/%.o)
+IMAGEQUANT_CFLAGS = -fno-math-errno -funroll-loops -fomit-frame-pointer -Wall -std=c99 -Wno-attributes
+IMAGEQUANT_CFLAGS += -O3 -DNDEBUG -DUSE_SSE=1 -msse -mfpmath=sse -Wno-unknown-pragmas -fexcess-precision=fast
+IMAGEQUANT_CFLAGS += -Ithird_party/libimagequant
+
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
+
+SHADERS := $(wildcard shaders/*)
 
 FLATBUFFER_SCHEMAS := $(wildcard fb/*.fbs)
 
@@ -52,7 +64,7 @@ ifeq ($(WINDOWS_BUILD), 1)
 	BIN_OBJS = $(BINS:bin/%.exe=obj/src/%.o)
 endif
 
-INCLUDES +=-Iinc -Ithird_party -Ifb
+INCLUDES +=-Iinc -Ithird_party -Ifb -Ithird_party/libimagequant
 
 # Platforms.
 DEFAULT_TARGETS = $(BINS)
@@ -110,8 +122,11 @@ dep/%.d: %.cpp $(FLATBUFFER_GENERATED_FILES)
 obj/%.o: %.cpp $(FLATBUFFER_GENERATED_FILES)
 	$(Q) $(CXX) $(CXXFLAGS) $(INCLUDES) -c $(@:obj/%.o=%.cpp) -o $@
 
-bin/make_assets bin/make_assets.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o
-	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o -o $@ $(LDFLAGS)
+obj/third_party/libimagequant/%.o: third_party/libimagequant/%.c
+	$(Q) $(IMAGEQUANT_CC) $(IMAGEQUANT_CFLAGS) -c $(@:obj/third_party/libimagequant/%.o=third_party/libimagequant/%.c) -o $@
+
+bin/make_assets bin/make_assets.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/make_assets.o $(IMAGEQUANT_OBJS)
+	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(IMAGEQUANT_OBJS) obj/src/make_assets.o -o $@ $(LDFLAGS)
 
 bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o -o $@ $(LDFLAGS)
@@ -119,7 +134,7 @@ bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 clean:
 	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES)
 
-$(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o em_shell.html
+$(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) $(SHADERS) obj/src/hex0ad.o em_shell.html
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)
 
 run_web: $(WEB_BIN).html
@@ -127,10 +142,6 @@ run_web: $(WEB_BIN).html
 
 no_deps = 
 ifeq ($(MAKECMDGOALS),clean)
-	no_deps = yes
-endif
-
-ifeq ($(MAKECMDGOALS),run_web)
 	no_deps = yes
 endif
 
