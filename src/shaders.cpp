@@ -146,29 +146,36 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
   }
 }
 
-GLint ShaderProgram::GetUniformLocation(const std::string& name) {
-  auto loc = glGetUniformLocation(program_, name.c_str());
+GLint ShaderProgram::GetUniformLocation(const NameLiteral& name) {
+  GLint* loc_ptr = uniform_locations_cache_.Find(name);
 
-  constexpr bool kCheckShaderActive = false;
-  if (kCheckShaderActive && loc == -1) {
-    LOG_ERROR("% is not an active uniform in (%, %)", name,
-              vertex_shader_file_name_, fragment_shader_file_name_);
-    throw std::runtime_error("GetUniformLocation failed.");
+  if (!loc_ptr) {
+    auto loc = glGetUniformLocation(program_, name.Ptr());
+
+    constexpr bool kCheckShaderActive = false;
+    if (kCheckShaderActive && loc == -1) {
+      LOG_ERROR("% is not an active uniform in (%, %)", name,
+                vertex_shader_file_name_, fragment_shader_file_name_);
+      throw std::runtime_error("GetUniformLocation failed.");
+    }
+
+    if (loc == GL_INVALID_VALUE) {
+      LOG_ERROR("Invalid shader program (%, %)",
+                vertex_shader_file_name_, fragment_shader_file_name_);
+      throw std::runtime_error("GetUniformLocation failed.");
+    }
+
+    if (loc == GL_INVALID_OPERATION) {
+      LOG_ERROR("Shader program has not been successfully linked (%, %)",
+                vertex_shader_file_name_, fragment_shader_file_name_);
+      throw std::runtime_error("GetUniformLocation failed.");
+    }
+
+    uniform_locations_cache_.InsertOrReplace(name, loc);
+    return loc;
+  } else {
+    return *loc_ptr;
   }
-
-  if (loc == GL_INVALID_VALUE) {
-    LOG_ERROR("Invalid shader program (%, %)",
-              vertex_shader_file_name_, fragment_shader_file_name_);
-    throw std::runtime_error("GetUniformLocation failed.");
-  }
-
-  if (loc == GL_INVALID_OPERATION) {
-    LOG_ERROR("Shader program has not been successfully linked (%, %)",
-              vertex_shader_file_name_, fragment_shader_file_name_);
-    throw std::runtime_error("GetUniformLocation failed.");
-  }
-
-  return loc;
 }
 
 ShaderProgram::~ShaderProgram() {
