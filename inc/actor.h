@@ -12,6 +12,7 @@
 #include "glm/gtc/type_ptr.hpp"
 
 #include "renderer.h"
+#include "texture_manager.h"
 
 #include "actor_generated.h"
 #include "mesh_generated.h"

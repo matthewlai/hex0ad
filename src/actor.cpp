@@ -9,7 +9,6 @@
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/gtx/string_cast.hpp"
 #include "glm/gtx/transform.hpp"
-#include "lodepng/lodepng.h"
 
 #include "logger.h"
 #include "renderer.h"
@@ -19,7 +18,6 @@
 namespace {
 static constexpr const char* kActorPathPrefix = "assets/art/actors/";
 static constexpr const char* kMeshPathPrefix = "assets/art/meshes/";
-static constexpr const char* kTexturePathPrefix = "assets/art/textures/skins/";
 
 // Data about a mesh that has been uploaded to the GPU (used at least once).
 struct MeshGPUData {
@@ -50,73 +48,6 @@ struct MeshGPUData {
   GLuint indices_vbo_id;
   GLsizei num_indices;
 };
-
-struct TextureSet {
-  std::string base_texture;
-  std::string norm_texture;
-  std::string spec_texture;
-  std::string ao_texture;
-};
-
-void BindTexture(const std::string& texture_name, GLenum texture_unit) {
-  static std::map<std::string, GLuint> texture_cache;
-  glActiveTexture(texture_unit);
-  auto it = texture_cache.find(texture_name);
-  if (it == texture_cache.end()) {
-    GLuint texture_id;
-    glGenTextures(1, &texture_id);
-    CHECK_GL_ERROR;
-    glBindTexture(GL_TEXTURE_2D, texture_id);
-    CHECK_GL_ERROR;
-
-    texture_cache.insert(std::make_pair(texture_name, texture_id));
-
-    std::string png_path = std::string(kTexturePathPrefix) + texture_name + ".png";
-    std::vector<uint8_t> image_data;
-    uint32_t width, height;
-    uint32_t error = lodepng::decode(image_data, width, height, png_path.c_str());
-
-    if (error) {
-      LOG_ERROR("Failed to load texture file %: %", texture_name, lodepng_error_text(error));
-      return;
-    }
-
-    glTexImage2D(GL_TEXTURE_2D, /*level=*/0, /*internalFormat=*/GL_RGBA, width, height,
-                 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data.data());
-    CHECK_GL_ERROR;
-
-    // These settings apply to the active texture unit, so we don't actually need to
-    // do it for every texture loaded, but this is an easy way to ensure that we are applying
-    // them to all the texture units we use, and the performance hit is negligible.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 10); // Our largest textures are 2^10
-
-    glGenerateMipmap(GL_TEXTURE_2D);
-  } else {
-    glBindTexture(GL_TEXTURE_2D, it->second);
-  }
-}
-
-template <typename BufT>
-GLuint MakeAndUploadVBO(GLenum binding_target, BufT* buf) {
-  GLuint vbo_id;
-  glGenBuffers(1, &vbo_id);
-  CHECK_GL_ERROR
-  glBindBuffer(binding_target, vbo_id);
-  CHECK_GL_ERROR
-  glBufferData(binding_target, sizeof(typename BufT::return_type) * buf->size(), 
-               buf->data(), GL_STATIC_DRAW);
-  CHECK_GL_ERROR
-  return vbo_id;
-}
-
-void UseVBO(GLenum binding_target, int attrib_location, GLenum gl_type, int components_per_element, GLuint vbo_id) {
-  glEnableVertexAttribArray(attrib_location);
-  glBindBuffer(binding_target, vbo_id);
-  glVertexAttribPointer(attrib_location, components_per_element, gl_type, GL_FALSE, 0, (const void*) 0);
-}
 
 std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_name) {
   static std::map<std::string, std::map<std::string, glm::mat4>> cache;
@@ -160,30 +91,30 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     MeshGPUData data;
     data.shader = GetShader("shaders/actor.vs", "shaders/actor.fs");
     data.shader->Activate();
-    data.mvp_loc = data.shader->GetUniformLocation("mvp");
-    data.normal_matrix_loc = data.shader->GetUniformLocation("normal_matrix");
-    data.model_loc = data.shader->GetUniformLocation("model");
-    data.player_colour_loc = data.shader->GetUniformLocation("player_colour");
-    data.light_pos_loc = data.shader->GetUniformLocation("light_pos");
-    data.eye_pos_loc = data.shader->GetUniformLocation("eye_pos");
+    data.mvp_loc = data.shader->GetUniformLocation("mvp"_name);
+    data.normal_matrix_loc = data.shader->GetUniformLocation("normal_matrix"_name);
+    data.model_loc = data.shader->GetUniformLocation("model"_name);
+    data.player_colour_loc = data.shader->GetUniformLocation("player_colour"_name);
+    data.light_pos_loc = data.shader->GetUniformLocation("light_pos"_name);
+    data.eye_pos_loc = data.shader->GetUniformLocation("eye_pos"_name);
 
-    data.base_tex_loc = data.shader->GetUniformLocation("base_texture");
-    data.norm_tex_loc = data.shader->GetUniformLocation("norm_texture");
-    data.spec_tex_loc = data.shader->GetUniformLocation("spec_texture");
-    data.ao_tex_loc = data.shader->GetUniformLocation("ao_texture");
+    data.base_tex_loc = data.shader->GetUniformLocation("base_texture"_name);
+    data.norm_tex_loc = data.shader->GetUniformLocation("norm_texture"_name);
+    data.spec_tex_loc = data.shader->GetUniformLocation("spec_texture"_name);
+    data.ao_tex_loc = data.shader->GetUniformLocation("ao_texture"_name);
 
     #define GraphicsSetting(upper, lower, type, default, toggle_key) \
-      data.lower ## _loc = data.shader->GetUniformLocation(#lower);
+      data.lower ## _loc = data.shader->GetUniformLocation(NameLiteral(#lower));
     GRAPHICS_SETTINGS
     #undef GraphicsSetting
 
     // Upload all the vertex attributes to the GPU.
-    data.vertices_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->vertices());
-    data.normals_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->normals());
-    data.tangents_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->tangents());
-    data.tex_coords_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->tex_coords());
-    data.ao_tex_coords_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, mesh_data->ao_tex_coords());
-    data.indices_vbo_id = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, mesh_data->vertex_indices());
+    data.vertices_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->vertices());
+    data.normals_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->normals());
+    data.tangents_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->tangents());
+    data.tex_coords_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->tex_coords());
+    data.ao_tex_coords_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->ao_tex_coords());
+    data.indices_vbo_id = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, *mesh_data->vertex_indices());
 
     data.num_indices = mesh_data->vertex_indices()->size();
     it = mesh_gpu_data_cache.insert(std::make_pair(mesh_file_name, data)).first;
@@ -220,25 +151,25 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     return;
   }
 
-  BindTexture(textures.base_texture, GL_TEXTURE0);
+  TextureManager::GetInstance()->BindTexture(textures.base_texture, GL_TEXTURE0);
 
   // Texture unit 1 for the normal texture.
   if (!textures.norm_texture.empty()) {
-    BindTexture(textures.norm_texture, GL_TEXTURE1);
+    TextureManager::GetInstance()->BindTexture(textures.norm_texture, GL_TEXTURE1);
   } else {
     glUniform1i(data.use_normal_map_loc, 0);
   }
 
   // Texture unit 2 for the spec texture
   if (!textures.spec_texture.empty()) {
-    BindTexture(textures.spec_texture, GL_TEXTURE2);
+    TextureManager::GetInstance()->BindTexture(textures.spec_texture, GL_TEXTURE2);
   } else {
     glUniform1i(data.use_specular_highlight_loc, 0);
   }
 
   // Texture unit 3 for the spec texture
   if (!textures.ao_texture.empty()) {
-    BindTexture(textures.ao_texture, GL_TEXTURE3);
+    TextureManager::GetInstance()->BindTexture(textures.ao_texture, GL_TEXTURE3);
   } else {
     glUniform1i(data.use_ao_map_loc, 0);
   }
@@ -292,8 +223,9 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_te
 }
 
 void Actor::Render(RenderContext* context) {
-  //Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::rotate(float(M_PI) / 2.0f, glm::vec3(1.0f, 0.0f, 0.0f)));
-  Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)));
+  // Models are supposed to be using 2m units, so scaling by 0.5 here give us 1m units to match rest of the game.
+  // https://trac.wildfiregames.com/wiki/ArtScaleAndProportions
+  Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::scale(glm::vec3(0.5f, 0.5f, 0.5f)));
 }
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
@@ -358,7 +290,8 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
 
   attachpoints["root"] = glm::mat4(1.0f);
 
-  RenderMesh(mesh_path, textures, context->vp, model * attachpoints["main_mesh"], context);
+  RenderMesh(mesh_path, textures, context->projection * context->view,
+             model * attachpoints["main_mesh"], context);
 
   for (auto& [point, actor_templates] : props) {
     for (auto& actor_template : actor_templates) {
