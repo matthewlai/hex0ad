@@ -1,0 +1,10 @@
+include "texture.fbs";
+
+namespace data;
+
+table Terrain {
+	path:string;
+  textures:[Texture];
+}
+
+root_type Terrain;

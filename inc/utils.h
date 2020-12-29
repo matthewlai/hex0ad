@@ -3,14 +3,22 @@
 
 #include <chrono>
 #include <cstdint>
+#include <limits>
 #include <ostream>
+#include <random>
 #include <stdexcept>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
+#if defined(_WIN32)
+#define _CRT_RAND_S
+#include <stdlib.h>
+#endif
+
 #include "logger.h"
+#include "platform_includes.h"
 
 // SDL uses return values to indicate error. We have these macros to log and
 // convert them to exceptions.
@@ -34,6 +42,34 @@ inline uint64_t GetTimeUs() {
   using Clock = std::chrono::steady_clock;
   auto now = Clock::now().time_since_epoch();
   return std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+}
+
+// std::random_device is not implemented on Windows. Not sure about
+// emscripten, so we mix in other shit as backup.
+// https://gcc.gnu.org/bugzilla/show_bug.cgi?id=85494
+inline unsigned int RngSeed() {
+  static std::random_device rd;
+  unsigned int ret = rd();
+  ret ^= std::chrono::high_resolution_clock::now().time_since_epoch().count();
+
+  #if defined(_WIN32)
+  // MinGW headers don't seem to provide Microsoft's recommended rand_s(), so we use rand()
+  // instead. But we are not seeding it, so what does it do? Who knows!
+  ret ^= rand();
+  #endif
+
+  #ifdef __EMSCRIPTEN__
+  ret ^= static_cast<unsigned int>(emscripten_random() * static_cast<float>(std::numeric_limits<unsigned int>::max()));
+  #endif
+
+  return ret;
+}
+
+// Convenience function to generate a number in [a, b-1].
+inline int64_t Rand(int64_t a, int64_t b) {
+  static std::mt19937 rng(RngSeed());
+  std::uniform_int_distribution dist(a, b - 1);
+  return dist(rng);
 }
 
 // We use pointer lookup for caches where we know the name will

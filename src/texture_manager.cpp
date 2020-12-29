@@ -5,7 +5,7 @@
 #include "utils.h"
 
 namespace {
-static constexpr const char* kTexturePathPrefix = "assets/art/textures/skins/";
+static constexpr const char* kTexturePathPrefix = "assets/art/textures/";
 }
 
 void TextureManager::BindTexture(const std::string& texture_name, GLenum texture_unit) {

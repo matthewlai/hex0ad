@@ -248,8 +248,9 @@ int main(int /*argc*/, char** /*argv*/) {
   for (std::size_t i = 0; i < g_state.actors.size(); ++i) {
     float arg = 2.0f * M_PI / g_state.actors.size() * i;
     float dist = 35.0f;
-    glm::vec3 position(dist * cos(arg), dist * sin(arg), 0.0f);
-    g_state.actors[i].SetPosition(position);
+    glm::vec2 position(dist * cos(arg), dist * sin(arg));
+    position = g_state.terrain->SnapToGrid(position);
+    g_state.actors[i].SetPosition(glm::vec3(position.x, position.y, 0.0f));
   }
 
   #ifdef __EMSCRIPTEN__

@@ -5,6 +5,8 @@
 #include "platform_includes.h"
 #include "renderer.h"
 
+constexpr static float kGridSize = 5.0f;
+
 class Terrain : public Renderable {
  public:
   Terrain();
@@ -12,6 +14,10 @@ class Terrain : public Renderable {
   void Render(RenderContext* context) override;
 
   void ToggleRenderGround() { render_ground_ ^= 1; }
+
+  glm::vec2 SnapToGrid(const glm::vec2& coords) {
+    return Hex::SnapToGrid(coords, kGridSize);
+  }
 
   virtual ~Terrain() {}
 
@@ -26,6 +32,7 @@ class Terrain : public Renderable {
   std::size_t edges_num_indices_;
 
   bool render_ground_;
+  std::size_t terrain_selection_;
 };
 
 #endif // TERRAIN_H

@@ -6,13 +6,60 @@
 #include "texture_manager.h"
 #include "utils.h"
 
+#include "terrain_generated.h"
+
 namespace {
 // 0AD "tiles" are 2m x 2m https://trac.wildfiregames.com/wiki/ArtScaleAndProportions
 // Which means terrain textures should repeat at 22x22m.
 // Models are supposed to be 2m = 1 unit.
-constexpr static float kGridSize = 5.0f;
 constexpr static float kHexRingOffset = kGridSize * 0.05f;
 constexpr static int kMapSize = 15;
+
+static constexpr const char* kTerrainPathPrefix = "assets/art/terrains/";
+
+static constexpr const char* kTerrainPaths[] = {
+  "biome-alpine/alpine_snow_a.fb", // Have norm and spec
+  "biome-alpine/new_alpine_grass_a.fb",
+  "grass/grass1.fb",
+  "grass/grass_field_a.fb",
+  "grass/new_savanna_grass_b.fb",
+  "biome-desert/desert_city_tile.fb", // Have norm and spec
+  "biome-desert/desert_grass_a.fb", // Have norm and spec
+  "biome-desert/desert_farmland.fb", // Have norm and spec
+};
+
+TextureSet* TerrainTextureSet(const std::string& path) {
+  static std::map<std::string, TextureSet> cache;
+  auto it = cache.find(path);
+  if (it == cache.end()) {
+    std::vector<std::uint8_t> raw_buffer =
+        ReadWholeFile(std::string(kTerrainPathPrefix) + path);
+    const data::Terrain* terrain_data = data::GetTerrain(raw_buffer.data());
+
+    TextureSet textures;
+
+    for (const auto* texture : *terrain_data->textures()) {
+      auto texture_name = texture->name()->str();
+      auto texture_file = texture->file()->str();
+      if (texture_name == "baseTex") {
+        LOG_DEBUG("baseTex found: %", texture_file);
+        textures.base_texture = texture_file;
+      } else if (texture_name == "normTex") {
+        LOG_DEBUG("normTex found: %", texture_file);
+        textures.norm_texture = texture_file;
+      } else if (texture_name == "specTex") {
+        LOG_DEBUG("specTex found: %", texture_file);
+        textures.spec_texture = texture_file;
+      } else if (texture_name == "aoTex") {
+        LOG_DEBUG("aoTex found: %", texture_file);
+        textures.ao_texture = texture_file;
+      }
+    }
+
+    it = cache.insert(std::make_pair(path, textures)).first;
+  }
+  return &(it->second);
+}
 
 void DrawHex(const Hex& hex, std::vector<float>* positions, std::vector<GLuint>* indices) {
   GLuint base_index = positions->size() / 3;
@@ -124,7 +171,8 @@ Terrain::Terrain() :
     edges_vertices_vbo_id_(0),
     edges_indices_vbo_id_(0),
     edges_num_indices_(0),
-    render_ground_(true) {}
+    render_ground_(true),
+    terrain_selection_(0) {}
 
 void Terrain::Render(RenderContext* context) {
   if (!render_ground_) {
@@ -157,10 +205,23 @@ void Terrain::Render(RenderContext* context) {
     shader_ = GetShader("shaders/terrain.vs", "shaders/terrain.fs");
     shader_->Activate();
 
+    // Each 0ad tile is 2m x 2m, and a terrain texture is supposed to span 11x11 tiles.
+    // https://trac.wildfiregames.com/wiki/ArtDesignDocument#TerrainTextures
+    shader_->SetUniform("texture_scale"_name, (1.0f / 22.0f));
+
+    std::size_t num_terrains = sizeof(kTerrainPaths) / sizeof(kTerrainPaths[0]);
+    terrain_selection_ = Rand(0, num_terrains);
+    LOG_INFO("Selected terrain % (%/%)", kTerrainPaths[terrain_selection_], terrain_selection_, num_terrains);
+
     initialized_ = true;
   }
 
   shader_->Activate();
+
+  TextureSet* textures = TerrainTextureSet(kTerrainPaths[terrain_selection_]);
+
+  TextureManager::GetInstance()->BindTexture(textures->base_texture, GL_TEXTURE0);
+  shader_->SetUniform("base_texture"_name, 0);
 
   glm::mat4 mvp = context->projection * context->view;
   shader_->SetUniform("mvp"_name, mvp);

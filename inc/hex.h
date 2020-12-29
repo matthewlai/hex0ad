@@ -76,6 +76,28 @@ class Hex {
   	return glm::vec2(x, y);
   }
 
+  static Hex HexRound(float q_frac, float r_frac) {
+    glm::vec3 cube_frac(q_frac, r_frac, -(q_frac + r_frac));
+    glm::vec3 cube_rounded = glm::round(cube_frac);
+    glm::vec3 diff = glm::abs(cube_frac - cube_rounded);
+    if (diff.x > diff.y && diff.x > diff.z) {
+      cube_rounded.x = -(cube_rounded.y + cube_rounded.z);
+    } else if (diff.y > diff.x && diff.y > diff.z) {
+      cube_rounded.y = -(cube_rounded.x + cube_rounded.z);
+    }
+    return Hex(round(cube_rounded.x), round(cube_rounded.y));
+  }
+
+  static Hex CartesianToHex(const glm::vec2& coords, float grid_size) {
+    float q_frac = (sqrt(3.0f) / 3.0f * coords.x - 1.0f / 3.0f * coords.y) / grid_size;
+    float r_frac = 2.0f / 3.0f * coords.y / grid_size;
+    return HexRound(q_frac, r_frac);
+  }
+
+  static glm::vec2 SnapToGrid(const glm::vec2& coords, float grid_size) {
+    return CartesianToHex(coords, grid_size).Centre(grid_size);
+  }
+
   int32_t q() const { return q_; }
   int32_t r() const { return r_; }
   int32_t s() const { return -(q_ + r_); }

@@ -162,8 +162,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
 /*static*/ ActorTemplate& ActorTemplate::GetTemplate(const std::string& actor_path) {
   static std::map<std::string, ActorTemplate> template_cache;
-  static std::random_device rd;
-  static std::mt19937 rng(rd());
+  static std::mt19937 rng(RngSeed());
   auto it = template_cache.find(actor_path);
   if (it == template_cache.end()) {
     it = template_cache.insert(std::make_pair(actor_path, ActorTemplate(actor_path, &rng))).first;

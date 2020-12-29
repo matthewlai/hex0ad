@@ -16,6 +16,8 @@
 
 #include "actor_generated.h"
 #include "mesh_generated.h"
+#include "terrain_generated.h"
+#include "texture_generated.h"
 
 #include "flatbuffers/flatbuffers.h"
 
@@ -65,14 +67,28 @@ static constexpr const char* kTestActorPaths[] = {
     "units/romans/hero_cavalry_swordsman_maximus_r.xml",
     };
 
+static constexpr const char* kTestTerrainPaths[] = {
+    "biome-alpine/alpine_snow_a.xml", // Have norm and spec
+    "biome-alpine/new_alpine_grass_a.xml",
+    "grass/grass1.xml",
+    "grass/grass_field_a.xml",
+    "grass/new_savanna_grass_b.xml",
+    "biome-desert/desert_city_tile.xml", // Have norm and spec
+    "biome-desert/desert_grass_a.xml", // Have norm and spec
+    "biome-desert/desert_farmland.xml", // Have norm and spec
+    };
+
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
 
 static constexpr const char* kInputPrefix = "0ad_assets/";
 static constexpr const char* kOutputPrefix = "assets/";
 static constexpr const char* kActorPathPrefix = "art/actors/";
 static constexpr const char* kMeshPathPrefix = "art/meshes/";
-static constexpr const char* kTexturePathPrefix = "art/textures/skins/";
+static constexpr const char* kTexturePathPrefix = "art/textures/";
+static constexpr const char* kActorTexturePathPrefix = "skins/";
 static constexpr const char* kVariantPathPrefix = "art/variants/";
+static constexpr const char* kTerrainPathPrefix = "art/terrains/";
+static constexpr const char* kTerrainTexturePathPrefix = "terrain/";
 
 class DoneTracker {
  public:
@@ -815,13 +831,13 @@ void MakeActor(const std::string& actor_path) {
           std::string texture_file = texture.ToElement()->Attribute("file");
           {
             std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
-            g_textures_to_save.insert(texture_file);
+            g_textures_to_save.insert(kActorTexturePathPrefix + texture_file);
           }
           LOG_INFO("Enqueued texture %", texture_file);
           texture_offsets.push_back(data::CreateTexture(
               builder,
               /*name=*/builder.CreateString(texture_name),
-              /*file=*/builder.CreateString(RemoveExtension(texture_file))
+              /*file=*/builder.CreateString(kActorTexturePathPrefix + RemoveExtension(texture_file))
             ));
         }
       }
@@ -880,6 +896,52 @@ void MakeActor(const std::string& actor_path) {
               builder.GetBufferPointer(), builder.GetSize());
 }
 
+void MakeTerrain(const std::string& terrain_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(terrain_path)) {
+    return;
+  }
+  std::string full_path = std::string(kInputPrefix) + kTerrainPathPrefix + terrain_path;
+  flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
+  LOG_INFO("Parsing terrain % at %", terrain_path, full_path);
+  TinyXMLDocument xml_doc;
+  if (xml_doc.LoadFile(full_path.c_str()) != 0) {
+    throw std::runtime_error(std::string("Failed to open: ") + full_path);
+  }
+
+  XMLHandle root = XMLHandle(xml_doc.FirstChildElement("terrain"));
+
+  auto textures_containers = GetAllChildrenElements(root, "textures");
+  std::vector<flatbuffers::Offset<data::Texture>> texture_offsets;
+  if (textures_containers.size() > 1) {
+    throw std::runtime_error("More than one <texture>?");
+  } else if (textures_containers.size() == 1) {
+    auto textures = GetAllChildrenElements(textures_containers[0], "texture");
+    for (auto& texture : textures) {
+      std::string texture_name = texture.ToElement()->Attribute("name");
+      std::string texture_file = texture.ToElement()->Attribute("file");
+      {
+        std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
+        g_textures_to_save.insert(kTerrainTexturePathPrefix + texture_file);
+      }
+      LOG_INFO("Enqueued texture %", texture_file);
+      texture_offsets.push_back(data::CreateTexture(
+          builder,
+          /*name=*/builder.CreateString(texture_name),
+          /*file=*/builder.CreateString(kTerrainTexturePathPrefix + RemoveExtension(texture_file))
+        ));
+    }
+  }
+
+  auto terrain = data::CreateTerrain(
+      builder,
+      /*path=*/builder.CreateString(RemoveExtension(terrain_path)),
+      /*textures=*/builder.CreateVector(texture_offsets));
+  builder.Finish(terrain);
+  WriteToFile(std::string(kOutputPrefix) + kTerrainPathPrefix + RemoveExtension(terrain_path) + ".fb",
+              builder.GetBufferPointer(), builder.GetSize());
+}
+
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
   auto start_time = GetTimeUs();
@@ -915,6 +977,10 @@ int main(int /*argc*/, char** /*argv*/) {
   std::vector<std::thread> texture_workers;
   for (unsigned int i = 0; i < threads_to_use; ++i) {
     texture_workers.push_back(std::thread(worker_fn));
+  }
+
+  for (const auto& path : kTestTerrainPaths) {
+    MakeTerrain(path);
   }
 
   for (const auto& path : kTestActorPaths) {
