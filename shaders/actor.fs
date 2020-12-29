@@ -14,7 +14,9 @@ in vec2 tex_coords;
 in vec2 ao_tex_coords;
 in vec3 interp_normal;
 in mat3 tbn;
-in vec3 world_pos;
+
+in vec3 norm_world_to_light;
+in vec3 norm_world_to_eye;
 
 uniform sampler2D base_texture;
 uniform sampler2D norm_texture;
@@ -22,8 +24,6 @@ uniform sampler2D spec_texture;
 uniform sampler2D ao_texture;
 
 uniform vec3 player_colour;
-uniform vec3 light_pos;
-uniform vec3 eye_pos;
 
 // Effects settings.
 uniform bool use_lighting;
@@ -53,9 +53,8 @@ void main() {
   }
 
   if (use_lighting) {
-    vec3 light_dir = normalize(light_pos - world_pos);
     vec3 norm = normalize(normal);
-    float diffuse_factor = max(dot(norm, light_dir), 0.0f) * kDirectionalLightIntensity;
+    float diffuse_factor = max(dot(norm, norm_world_to_light), 0.0f) * kDirectionalLightIntensity;
     vec3 diffuse = diffuse_factor * mixed_colour;
 
     vec3 ambient = kAmbientLight * mixed_colour;
@@ -70,9 +69,8 @@ void main() {
     if (use_specular_highlight) {
       vec4 s = texture(spec_texture, tex_coords);
       vec3 spec_colour = s.rgb;
-      vec3 view_dir = normalize(eye_pos - world_pos);
-      vec3 reflect_dir = reflect(-light_dir, norm);
-      float spec_power = pow(max(dot(view_dir, reflect_dir), 0.0), kShininess);
+      vec3 reflect_dir = reflect(-norm_world_to_light, norm);
+      float spec_power = pow(max(dot(norm_world_to_eye, reflect_dir), 0.0), kShininess);
       spec = spec_colour * spec_power;
     }
 

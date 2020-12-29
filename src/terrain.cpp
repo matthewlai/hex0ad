@@ -12,17 +12,13 @@ namespace {
 // 0AD "tiles" are 2m x 2m https://trac.wildfiregames.com/wiki/ArtScaleAndProportions
 // Which means terrain textures should repeat at 22x22m.
 // Models are supposed to be 2m = 1 unit.
-constexpr static float kHexRingOffset = kGridSize * 0.05f;
+constexpr static float kHexRingOffset = kGridSize * 0.07f;
 constexpr static int kMapSize = 15;
 
 static constexpr const char* kTerrainPathPrefix = "assets/art/terrains/";
 
 static constexpr const char* kTerrainPaths[] = {
   "biome-alpine/alpine_snow_a.fb", // Have norm and spec
-  "biome-alpine/new_alpine_grass_a.fb",
-  "grass/grass1.fb",
-  "grass/grass_field_a.fb",
-  "grass/new_savanna_grass_b.fb",
   "biome-desert/desert_city_tile.fb", // Have norm and spec
   "biome-desert/desert_grass_a.fb", // Have norm and spec
   "biome-desert/desert_farmland.fb", // Have norm and spec
@@ -178,10 +174,30 @@ void Terrain::Render(RenderContext* context) {
 
   shader_->Activate();
 
+  shader_->SetUniform("light_pos"_name, context->light_pos);
+  shader_->SetUniform("eye_pos"_name, context->eye_pos);
+  shader_->SetUniform("use_lighting"_name, context->use_lighting);
+
   TextureSet* textures = TerrainTextureSet(kTerrainPaths[terrain_selection_]);
 
   TextureManager::GetInstance()->BindTexture(textures->base_texture, GL_TEXTURE0);
   shader_->SetUniform("base_texture"_name, 0);
+
+  if (!textures->spec_texture.empty() && context->use_specular_highlight) {
+    TextureManager::GetInstance()->BindTexture(textures->spec_texture, GL_TEXTURE1);
+    shader_->SetUniform("spec_texture"_name, 1);
+    shader_->SetUniform("use_specular_highlight"_name, 1);
+  } else {
+    shader_->SetUniform("use_specular_highlight"_name, 0);
+  }
+
+  if (!textures->norm_texture.empty() && context->use_normal_map) {
+    TextureManager::GetInstance()->BindTexture(textures->norm_texture, GL_TEXTURE2);
+    shader_->SetUniform("norm_texture"_name, 2);
+    shader_->SetUniform("use_normal_map"_name, 1);
+  } else {
+    shader_->SetUniform("use_normal_map"_name, 0);
+  }
 
   glm::mat4 mvp = context->projection * context->view;
   shader_->SetUniform("mvp"_name, mvp);
