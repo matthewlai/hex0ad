@@ -101,62 +101,22 @@ void DrawHexRing(const Hex& hex, std::vector<float>* positions, std::vector<GLui
 
   // 12 triangles for outer ring, 6 for inside.
   if (is_outside) {
-    indices->push_back(base_index + 0);
-    indices->push_back(base_index + 1);
-    indices->push_back(base_index + 7);
-    indices->push_back(base_index + 0);
-    indices->push_back(base_index + 7);
-    indices->push_back(base_index + 6);
-    indices->push_back(base_index + 1);
-    indices->push_back(base_index + 2);
-    indices->push_back(base_index + 8);
-    indices->push_back(base_index + 8);
-    indices->push_back(base_index + 7);
-    indices->push_back(base_index + 1);
-    indices->push_back(base_index + 8);
-    indices->push_back(base_index + 2);
-    indices->push_back(base_index + 9);
-    indices->push_back(base_index + 2);
-    indices->push_back(base_index + 3);
-    indices->push_back(base_index + 9);
+    constexpr static GLuint offsets[] = {
+      0, 1, 7, 0, 7, 6, 1, 2, 8, 8, 7, 1, 8, 2, 9, 2, 3, 9,
+      3, 10, 9, 3, 4, 10, 10, 4, 11, 4, 5, 11, 11, 5, 6, 5, 0, 6,
+    };
 
-    indices->push_back(base_index + 3);
-    indices->push_back(base_index + 10);
-    indices->push_back(base_index + 9);
-    indices->push_back(base_index + 3);
-    indices->push_back(base_index + 4);
-    indices->push_back(base_index + 10);
-    indices->push_back(base_index + 10);
-    indices->push_back(base_index + 4);
-    indices->push_back(base_index + 11);
-    indices->push_back(base_index + 4);
-    indices->push_back(base_index + 5);
-    indices->push_back(base_index + 11);
-    indices->push_back(base_index + 11);
-    indices->push_back(base_index + 5);
-    indices->push_back(base_index + 6);
-    indices->push_back(base_index + 5);
-    indices->push_back(base_index + 0);
-    indices->push_back(base_index + 6);
+    for (const auto& offset : offsets) {
+      indices->push_back(base_index + offset);
+    }
   } else {
-    indices->push_back(base_index + 0);
-    indices->push_back(base_index + 1);
-    indices->push_back(base_index + 5);
-    indices->push_back(base_index + 0);
-    indices->push_back(base_index + 5);
-    indices->push_back(base_index + 4);
-    indices->push_back(base_index + 1);
-    indices->push_back(base_index + 2);
-    indices->push_back(base_index + 6);
-    indices->push_back(base_index + 6);
-    indices->push_back(base_index + 5);
-    indices->push_back(base_index + 1);
-    indices->push_back(base_index + 6);
-    indices->push_back(base_index + 2);
-    indices->push_back(base_index + 7);
-    indices->push_back(base_index + 2);
-    indices->push_back(base_index + 3);
-    indices->push_back(base_index + 7);
+    constexpr static GLuint offsets[] = {
+      0, 1, 5, 0, 5, 4, 1, 2, 6, 6, 5, 1, 6, 2, 7, 2, 3, 7
+    };
+
+    for (const auto& offset : offsets) {
+      indices->push_back(base_index + offset);
+    }
   }
 }
 
