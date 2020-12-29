@@ -243,7 +243,8 @@ int main(int /*argc*/, char** /*argv*/) {
   g_state.actors.rbegin()->SetScale(5.0f);
   g_state.actors.push_back(ActorTemplate::GetTemplate("units/romans/hero_cavalry_swordsman_maximus_r.fb").MakeActor());
   g_state.actors.rbegin()->SetScale(5.0f);
-  
+  g_state.actors.push_back(ActorTemplate::GetTemplate("units/romans/cavalry_javelinist_a_m.fb").MakeActor());
+  g_state.actors.rbegin()->SetScale(5.0f);
 
   for (std::size_t i = 0; i < g_state.actors.size(); ++i) {
     float arg = 2.0f * M_PI / g_state.actors.size() * i;
