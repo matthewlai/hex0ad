@@ -65,14 +65,11 @@ static constexpr const char* kTestActorPaths[] = {
     "structures/persians/stable.xml",
     "units/athenians/hero_infantry_javelinist_iphicrates.xml",
     "units/romans/hero_cavalry_swordsman_maximus_r.xml",
+    "units/romans/cavalry_javelinist_a_m.xml",
     };
 
 static constexpr const char* kTestTerrainPaths[] = {
     "biome-alpine/alpine_snow_a.xml", // Have norm and spec
-    "biome-alpine/new_alpine_grass_a.xml",
-    "grass/grass1.xml",
-    "grass/grass_field_a.xml",
-    "grass/new_savanna_grass_b.xml",
     "biome-desert/desert_city_tile.xml", // Have norm and spec
     "biome-desert/desert_grass_a.xml", // Have norm and spec
     "biome-desert/desert_farmland.xml", // Have norm and spec
@@ -479,11 +476,19 @@ void AddAttachmentPoints(FCDSceneNode* node, const FMMatrix44& up_transform,
   }
 }
 
-void WriteImageOpt(const std::string& output_path, const std::vector<uint8_t>& uncompressed, int width, int height) {
-  std::vector<uint8_t> png_data;
+void WriteImageOpt(const std::string& output_path, std::vector<uint8_t>* uncompressed, int width, int height) {
+  // Make sure min alpha is 1, because libimagequant assumes we don't care about RGB if alpha = 0, and in textures
+  // alpha may not actually be used as transparency.
+  // https://github.com/ImageOptim/libimagequant/issues/45
+  for (int i = 0; i < (width * height); ++i) {
+    uint8_t* alpha = &((*uncompressed)[i * 4 + 3]);
+    if (*alpha < 1) {
+      *alpha = 1;
+    }
+  }
 
   liq_attr* handle = liq_attr_create();
-  liq_image* input_image = liq_image_create_rgba(handle, uncompressed.data(), width, height, 0);
+  liq_image* input_image = liq_image_create_rgba(handle, uncompressed->data(), width, height, 0);
   liq_result* quantization_result;
   if (liq_image_quantize(input_image, handle, &quantization_result) != LIQ_OK) {
     LOG_ERROR("Failed to quantize %", output_path);
@@ -508,6 +513,7 @@ void WriteImageOpt(const std::string& output_path, const std::vector<uint8_t>& u
     lodepng_palette_add(&state.info_raw, palette->entries[i].r, palette->entries[i].g, palette->entries[i].b, palette->entries[i].a);
   }
 
+  std::vector<uint8_t> png_data;
   uint32_t error = lodepng::encode(
       png_data, reinterpret_cast<const uint8_t*>(raw_8bit_pixels.data()), width, height, state);
   if (error) {
@@ -754,7 +760,7 @@ void SaveTextureImpl(const std::string& texture_path) {
       width = texture.extent().x;
       height = texture.extent().y;
     }
-    WriteImageOpt(output_path, uncompressed, width, height);
+    WriteImageOpt(output_path, &uncompressed, width, height);
   } else {
     LOG_ERROR("Unknown texture extension: %", old_extension);
     return;
