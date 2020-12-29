@@ -139,9 +139,11 @@ void Renderer::RenderFrameBegin() {
   render_context_.view = view;
   render_context_.projection = projection;
 
-  // Put the light 45 degrees from eye.
-  render_context_.light_pos = glm::normalize(
-      glm::vec3(sin(eye_avimuth_rad + M_PI / 4.0f), cos(eye_avimuth_rad + M_PI / 4.0f), 0.25f)) * eye_distance_;
+  glm::vec3 eye_to_centre = view_centre_ - render_context_.eye_pos;
+  render_context_.light_pos =
+      glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
+      - eye_to_centre
+      + render_context_.eye_pos;
 }
 
 void Renderer::Render(Renderable* renderable) {
