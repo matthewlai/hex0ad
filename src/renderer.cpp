@@ -105,15 +105,10 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
   //  an entire frame period), this is when the buffer swap happens.
   render_context_.frame_start_time = GetTimeUs();
 
-#ifdef __EMSCRIPTEN__
-  int window_width = EM_ASM_INT({ return document.getElementById('canvas').width; });
-  int window_height = EM_ASM_INT({ return document.getElementById('canvas').height; });
-#else
   SDL_Window* window = SDL_GL_GetCurrentWindow();
   int window_width;
   int window_height;
   SDL_GL_GetDrawableSize(window, &window_width, &window_height);
-#endif
 
   glViewport(0, 0, window_width, window_height);
   render_context_.window_width = window_width;

@@ -139,7 +139,7 @@ $(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) $(SHADERS) obj/src/hex0ad.o
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)
 
 run_web: $(WEB_BIN).html
-	$(Q) emrun $(WEB_BIN).html
+	$(Q) emrun $(WEB_BIN).html --no_browser
 
 no_deps = 
 ifeq ($(MAKECMDGOALS),clean)
