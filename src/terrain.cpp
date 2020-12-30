@@ -139,6 +139,10 @@ void Terrain::Render(RenderContext* context) {
     return;
   }
 
+  if (context->pass != RenderPass::kGeometry) {
+    return;
+  }
+
   if (!initialized_) {
     Hex origin;
 

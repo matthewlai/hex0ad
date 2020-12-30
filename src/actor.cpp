@@ -188,11 +188,14 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_te
 void Actor::Render(RenderContext* context) {
   // Models are supposed to be using 2m units, so scaling by 0.5 here give us 1m units to match rest of the game.
   // https://trac.wildfiregames.com/wiki/ArtScaleAndProportions
-  Render(context, glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::scale(glm::vec3(0.5f, 0.5f, 0.5f)));
+  Render(context,
+         glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::scale(glm::vec3(0.5f, 0.5f, 0.5f)));
 }
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
-  template_->Render(context, actor_config_, model);
+  if (context->pass == RenderPass::kGeometry) {
+    template_->Render(context, actor_config_, model);
+  }
 }
 
 ActorTemplate::ActorTemplate(const std::string& actor_path, std::mt19937* rng)

@@ -35,6 +35,10 @@ UI::UI() :
     indices_vbo_id_(0) {}
 
 void UI::Render(RenderContext* context) {
+  if (context->pass != RenderPass::kUi) {
+    return;
+  }
+
   if (!initialized_) {
     std::vector<float> positions;
     positions.push_back(0.0f); positions.push_back(0.0f); // v0

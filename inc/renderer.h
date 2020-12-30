@@ -18,6 +18,14 @@ namespace {
 constexpr uint64_t kRenderStatsPeriod = 100000;
 }
 
+enum class RenderPass {
+  // Standard geometry pass with normal MVP, depth testing enabled, alpha blending disabled.
+  kGeometry,
+
+  // UI pass with depth testing disabled, and alpha blending enabled. MVP ignored since we will be rendering in NDC directly.
+  kUi,
+};
+
 class Renderable {
  public:
   struct RenderContext {
@@ -32,6 +40,8 @@ class Renderable {
 
     uint64_t last_frame_time_us;
     uint64_t frame_start_time;
+
+    RenderPass pass;
 
     #define GraphicsSetting(upper, lower, type, default, toggle_key) type lower;
     GRAPHICS_SETTINGS
@@ -98,6 +108,9 @@ class Renderer {
   #undef GraphicsSetting
 
  private:
+  glm::vec3 EyePos();
+  glm::vec3 LightPos();
+
   // UnProject screen coordinates to a point on the z=0 plane.
   glm::vec3 UnProjectToXY(int32_t x, int32_t y);
 
@@ -117,6 +130,10 @@ class Renderer {
 
   float filtered_framerate_;
   std::string render_stats_;
+
+  bool first_frame_;
+
+  SDL_Window* window_;
 };
 
 template <typename T>
