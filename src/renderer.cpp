@@ -11,7 +11,9 @@
 #include "platform_includes.h"
 
 #include <cstddef>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 
 namespace {
 constexpr static float kFov = 60.0f;
@@ -87,6 +89,8 @@ Renderer::Renderer() {
   eye_distance_target_ = kDefaultEyeDistance;
 
   view_centre_ = glm::vec3(0.0, 0.0, 0.0);
+
+  filtered_framerate_ = 0.0f;
 }
 
 void Renderer::RenderFrameBegin() {
@@ -160,13 +164,17 @@ void Renderer::RenderFrameEnd() {
   uint64_t frame_end_time = GetTimeUs();
 
   ++render_context_.frame_counter;
+
+  uint64_t time_since_last_frame_us = render_context_.frame_start_time - render_context_.last_frame_time_us;
+  float frame_rate = 1000000.0f / time_since_last_frame_us;
+  filtered_framerate_ = filtered_framerate_ * 0.95f + frame_rate * 0.05f;
+
   if ((render_context_.frame_start_time - last_stat_time_us_) > kRenderStatsPeriod) {
-    uint64_t time_since_last_frame_us = render_context_.frame_start_time - render_context_.last_frame_time_us;
-    float frame_rate = 1000000.0f / time_since_last_frame_us;
-    LOG_INFO("Frame rate: %, draw calls time: % us, render time: % us",
-             frame_rate,
-             (draw_calls_end_time - render_context_.frame_start_time),
-             (frame_end_time - render_context_.frame_start_time));
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2);
+    ss << "FPS: " << filtered_framerate_ << " (draw calls: " << float(draw_calls_end_time - render_context_.frame_start_time) / 1000.0f
+       << "ms, render: " << float(frame_end_time - render_context_.frame_start_time) / 1000.0f << "ms)";
+    render_stats_ = ss.str();
     last_stat_time_us_ = render_context_.frame_start_time;
   }
   render_context_.last_frame_time_us = render_context_.frame_start_time;

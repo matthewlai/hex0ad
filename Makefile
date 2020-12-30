@@ -71,18 +71,19 @@ DEFAULT_TARGETS = $(BINS)
 
 # Flags.
 ifeq ($(EM_BUILD), 1)
-	CXXFLAGS = $(INCLUDES) -std=gnu++17 -s USE_SDL=2 -O3
-	LDFLAGS = --emrun -s WASM=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='["png"]' -s ALLOW_MEMORY_GROWTH=1
+	PORTS =  -s USE_SDL=2 -s USE_SDL_TTF=2
+	CXXFLAGS = $(INCLUDES) -std=gnu++17 $(PORTS) -O3
+	LDFLAGS =  $(PORTS) -s WASM=1 -s ALLOW_MEMORY_GROWTH=1
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g
 	LDFLAGS = -lm -lFColladaSD
 
 	ifeq ($(OS),Windows_NT)
-		LDFLAGS = -lmingw32 -lSDL2main -lSDL2 -lFColladaSD
+		LDFLAGS = -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lFColladaSD
 		LDFLAGS += -lopengl32 -lglew32
 	else
 		# For UNIX-like platforms.

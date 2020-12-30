@@ -15,7 +15,7 @@
 
 namespace {
 // How often rendering stats are updated.
-constexpr uint64_t kRenderStatsPeriod = 10000000;
+constexpr uint64_t kRenderStatsPeriod = 100000;
 }
 
 class Renderable {
@@ -92,12 +92,17 @@ class Renderer {
 
   void MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t y_to);
 
+  std::string LastStats() const { return render_stats_; }
+
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
     void Toggle ## upper() { render_context_.lower ^= 0x1; }
     GRAPHICS_SETTINGS
   #undef GraphicsSetting
 
  private:
+  // UnProject screen coordinates to a point on the z=0 plane.
+  glm::vec3 UnProjectToXY(int32_t x, int32_t y);
+
   Renderable::RenderContext render_context_;
   uint64_t last_stat_time_us_;
 
@@ -112,8 +117,8 @@ class Renderer {
   // dragging.
   glm::vec3 view_centre_;
 
-  // UnProject screen coordinates to a point on the z=0 plane.
-  glm::vec3 UnProjectToXY(int32_t x, int32_t y);
+  float filtered_framerate_;
+  std::string render_stats_;
 };
 
 template <typename T>

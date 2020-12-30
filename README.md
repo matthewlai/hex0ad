@@ -11,6 +11,9 @@ Tile-based strategy game using 0ad assets
 * SDL2 (https://www.libsdl.org/download-2.0.php)
 	* Download Windows development library (MinGW 32/64-bit)
 	* Copy into [MinGW installation directory]/x86_64-w64-mingw32
+* SDL ttf (https://www.libsdl.org/projects/SDL_ttf/)
+	* Download Windows development library (MinGW 32/64-bit)
+	* Copy into [MinGW installation directory]/
 * GLEW (http://www.grhmedia.com/glew.html)
 	* Download the latest mingw-w64 version
 	* Copy into [MinGW installation directory]/x86_64-w64-mingw32

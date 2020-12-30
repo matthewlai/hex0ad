@@ -34,9 +34,6 @@ void TextureManager::BindTexture(const std::string& texture_name, GLenum texture
                  0, GL_RGBA, GL_UNSIGNED_BYTE, image_data.data());
     CHECK_GL_ERROR;
 
-    // These settings apply to the active texture unit, so we don't actually need to
-    // do it for every texture loaded, but this is an easy way to ensure that we are applying
-    // them to all the texture units we use, and the performance hit is negligible.
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
@@ -46,4 +43,35 @@ void TextureManager::BindTexture(const std::string& texture_name, GLenum texture
   } else {
     glBindTexture(GL_TEXTURE_2D, it->second);
   }
+}
+
+GLuint TextureManager::MakeStreamingTexture(int width, int height) {
+  glActiveTexture(GL_TEXTURE0);
+  GLuint texture_id;
+  glGenTextures(1, &texture_id);
+  CHECK_GL_ERROR;
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  CHECK_GL_ERROR;
+  glTexImage2D(GL_TEXTURE_2D, /*level=*/0, /*internalFormat=*/GL_RGBA, width, height,
+               0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  CHECK_GL_ERROR;
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  return texture_id;
+}
+
+void TextureManager::BindStreamingTexture(GLuint texture, GLenum texture_unit) {
+  glActiveTexture(texture_unit);
+  glBindTexture(GL_TEXTURE_2D, texture);
+}
+
+void TextureManager::StreamData(uint8_t* data, int width, int height) {
+  glTexSubImage2D(GL_TEXTURE_2D, /*level=*/0, /*xoffset=*/0, /*yoffset=*/0, width, height,
+                  GL_RGBA, GL_UNSIGNED_BYTE, data);
 }

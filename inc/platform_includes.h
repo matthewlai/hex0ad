@@ -9,10 +9,15 @@
 #if defined(_WIN32)
 // We are not using sdl2-config on Windows
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
+#elif defined(__EMSCRIPTEN__)
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_ttf.h>
 #else
 // On other platforms sdl2-config will make sure we can find
 // SDL.h
 #include <SDL.h>
+#include <SDL_ttf.h>
 #endif
 
 // OSX doesn't support OpenGL ES. We use OpenGL ES on all other

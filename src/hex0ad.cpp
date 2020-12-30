@@ -14,6 +14,7 @@
 #include "logger.h"
 #include "renderer.h"
 #include "terrain.h"
+#include "ui.h"
 #include "utils.h"
 
 namespace {
@@ -26,6 +27,7 @@ struct ProgramState {
   std::unique_ptr<Renderer> renderer;
   std::unique_ptr<Terrain> terrain;
   std::vector<Actor> actors;
+  std::unique_ptr<UI> ui;
   int32_t last_mouse_x;
   int32_t last_mouse_y;
 } g_state;
@@ -187,6 +189,9 @@ bool main_loop() {
     g_state.renderer->Render(&actor);
   }
 
+  g_state.ui->SetDebugText(0, g_state.renderer->LastStats());
+  g_state.renderer->Render(g_state.ui.get());
+
   g_state.renderer->RenderFrameEnd();
 
   SDL_GL_SwapWindow(g_state.window);
@@ -231,6 +236,8 @@ int main(int /*argc*/, char** /*argv*/) {
   g_state.renderer = std::make_unique<Renderer>();
 
   g_state.terrain = std::make_unique<Terrain>();
+
+  g_state.ui = std::make_unique<UI>();
 
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/mauryas/fortress.fb").MakeActor());
   g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/stable.fb").MakeActor());
