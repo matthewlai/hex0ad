@@ -18,10 +18,14 @@ constexpr static int kMapSize = 15;
 static constexpr const char* kTerrainPathPrefix = "assets/art/terrains/";
 
 static constexpr const char* kTerrainPaths[] = {
-  "biome-alpine/alpine_snow_a.fb", // Have norm and spec
-  "biome-desert/desert_city_tile.fb", // Have norm and spec
-  "biome-desert/desert_grass_a.fb", // Have norm and spec
-  "biome-desert/desert_farmland.fb", // Have norm and spec
+    "biome-alpine/alpine_snow_a.fb",
+    "biome-desert/desert_city_tile.fb",
+    "biome-desert/desert_grass_a.fb",
+    "biome-desert/desert_farmland.fb",
+    "biome-polar/polar_ice.fb",
+    "biome-polar/polar_snow_a.fb",
+    "biome-savanna/savanna_tile_a.fb",
+    "biome-mediterranean/medit_sand_messy.fb",
 };
 
 TextureSet* TerrainTextureSet(const std::string& path) {

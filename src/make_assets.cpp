@@ -69,10 +69,14 @@ static constexpr const char* kTestActorPaths[] = {
     };
 
 static constexpr const char* kTestTerrainPaths[] = {
-    "biome-alpine/alpine_snow_a.xml", // Have norm and spec
-    "biome-desert/desert_city_tile.xml", // Have norm and spec
-    "biome-desert/desert_grass_a.xml", // Have norm and spec
-    "biome-desert/desert_farmland.xml", // Have norm and spec
+    "biome-alpine/alpine_snow_a.xml",
+    "biome-desert/desert_city_tile.xml",
+    "biome-desert/desert_grass_a.xml",
+    "biome-desert/desert_farmland.xml",
+    "biome-polar/polar_ice.xml",
+    "biome-polar/polar_snow_a.xml",
+    "biome-savanna/savanna_tile_a.xml",
+    "biome-mediterranean/medit_sand_messy.xml",
     };
 
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
