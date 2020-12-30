@@ -38,9 +38,6 @@ class Renderable {
     int32_t window_width;
     int32_t window_height;
 
-    uint64_t last_frame_time_us;
-    uint64_t frame_start_time;
-
     RenderPass pass;
 
     #define GraphicsSetting(upper, lower, type, default, toggle_key) type lower;
@@ -100,8 +97,6 @@ class Renderer {
 
   void MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t y_to);
 
-  std::string LastStats() const { return render_stats_; }
-
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
     void Toggle ## upper() { render_context_.lower ^= 0x1; }
     GRAPHICS_SETTINGS
@@ -127,9 +122,6 @@ class Renderer {
   // We store view centre in double vector to minimize error accumulation during
   // dragging.
   glm::vec3 view_centre_;
-
-  float filtered_framerate_;
-  std::string render_stats_;
 
   bool first_frame_;
 

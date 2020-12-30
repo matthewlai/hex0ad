@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <sstream>
 #include <vector>
 
 #ifdef __EMSCRIPTEN__
@@ -120,6 +121,20 @@ SDL_GLContext InitSDL() {
 }
 
 bool main_loop() {
+  static uint64_t last_frame_time = GetTimeUs() - 16666;
+  static float filtered_framerate = 0.0f;
+  uint64_t this_frame_time = GetTimeUs();
+  if (this_frame_time > last_frame_time) {
+    float frame_rate = 1000000.0f / (this_frame_time - last_frame_time);
+    filtered_framerate = filtered_framerate * 0.95f + frame_rate * 0.05f;
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2);
+    ss << "FPS: " << filtered_framerate;
+    g_state.ui->SetDebugText(0, ss.str());
+    last_frame_time = this_frame_time;
+  }
+
+
   SDL_Event e;
   bool quit = false;
   while (SDL_PollEvent(&e) != 0) {
@@ -187,7 +202,6 @@ bool main_loop() {
   for (auto& actor : g_state.actors) {
     renderables.push_back(&actor);
   }
-  g_state.ui->SetDebugText(0, g_state.renderer->LastStats());
   renderables.push_back(g_state.ui.get());
 
   g_state.renderer->RenderFrame(renderables);

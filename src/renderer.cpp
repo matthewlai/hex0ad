@@ -75,10 +75,6 @@ Renderer::Renderer() {
   GRAPHICS_SETTINGS
   #undef GraphicsSetting
 
-  render_context_.last_frame_time_us = GetTimeUs();
-
-  last_stat_time_us_ = GetTimeUs();
-
   #ifdef USE_OPENGL
   // OpenGL core profile doesn't have a default VAO. Use a single VAO for now.
   unsigned int vao;
@@ -94,8 +90,6 @@ Renderer::Renderer() {
 
   view_centre_ = glm::vec3(0.0, 0.0, 0.0);
 
-  filtered_framerate_ = 0.0f;
-
   first_frame_ = true;
 }
 
@@ -106,17 +100,6 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     first_frame_ = false;
     window_ = SDL_GL_GetCurrentWindow();
   }
-
-  // Make sure the last frame swap is done. This doesn't result in much
-  // performance penalty because with double buffering (as opposed to triple
-  // buffering), most GL calls we make below will require the swap to be done
-  // anyways. Calling glFinish() here allows us to get a better time measurement.
-  // All non-graphics CPU work should have been done by this point.
-  glFinish();
-
-  // Unless we are falling terribly behind (code before this point taking more than
-  //  an entire frame period), this is when the buffer swap happens.
-  render_context_.frame_start_time = GetTimeUs();
 
   int window_width;
   int window_height;
@@ -160,29 +143,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     renderable->Render(&render_context_);
   }
 
-  // This is when all the draw calls have been issued (all the CPU work is done).
-  uint64_t draw_calls_end_time = GetTimeUs();
-
-  glFinish();
-
-  // This is when all the drawing is done (to the back buffer).
-  uint64_t frame_end_time = GetTimeUs();
-
   ++render_context_.frame_counter;
-
-  uint64_t time_since_last_frame_us = render_context_.frame_start_time - render_context_.last_frame_time_us;
-  float frame_rate = 1000000.0f / time_since_last_frame_us;
-  filtered_framerate_ = filtered_framerate_ * 0.95f + frame_rate * 0.05f;
-
-  if ((render_context_.frame_start_time - last_stat_time_us_) > kRenderStatsPeriod) {
-    std::stringstream ss;
-    ss << std::fixed << std::setprecision(2);
-    ss << "FPS: " << filtered_framerate_ << " (draw calls: " << float(draw_calls_end_time - render_context_.frame_start_time) / 1000.0f
-       << "ms, render: " << float(frame_end_time - render_context_.frame_start_time) / 1000.0f << "ms)";
-    render_stats_ = ss.str();
-    last_stat_time_us_ = render_context_.frame_start_time;
-  }
-  render_context_.last_frame_time_us = render_context_.frame_start_time;
 
   SDL_GL_SwapWindow(window_);
 }
