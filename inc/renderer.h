@@ -56,9 +56,7 @@ class Renderer {
  public:
   Renderer();
 
-  void RenderFrameBegin();
-  void Render(Renderable* renderable);
-  void RenderFrameEnd();
+  void RenderFrame(const std::vector<Renderable*>& renderables);
 
   void AddAzimuth(float diff_az) {
     eye_azimuth_ += diff_az;

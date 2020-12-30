@@ -181,20 +181,17 @@ bool main_loop() {
     }
   }
 
-  g_state.renderer->RenderFrameBegin();
+  std::vector<Renderable*> renderables;
 
-  g_state.renderer->Render(g_state.terrain.get());
-
+  renderables.push_back(g_state.terrain.get());
   for (auto& actor : g_state.actors) {
-    g_state.renderer->Render(&actor);
+    renderables.push_back(&actor);
   }
-
   g_state.ui->SetDebugText(0, g_state.renderer->LastStats());
-  g_state.renderer->Render(g_state.ui.get());
+  renderables.push_back(g_state.ui.get());
 
-  g_state.renderer->RenderFrameEnd();
+  g_state.renderer->RenderFrame(renderables);
 
-  SDL_GL_SwapWindow(g_state.window);
   return quit;
 }
 

@@ -93,7 +93,7 @@ Renderer::Renderer() {
   filtered_framerate_ = 0.0f;
 }
 
-void Renderer::RenderFrameBegin() {
+void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
   // Make sure the last frame swap is done. This doesn't result in much
   // performance penalty because with double buffering (as opposed to triple
   // buffering), most GL calls we make below will require the swap to be done
@@ -148,13 +148,11 @@ void Renderer::RenderFrameBegin() {
       glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
       - eye_to_centre
       + render_context_.eye_pos;
-}
 
-void Renderer::Render(Renderable* renderable) {
-  renderable->Render(&render_context_);
-}
+  for (auto* renderable : renderables) {
+    renderable->Render(&render_context_);
+  }
 
-void Renderer::RenderFrameEnd() {
   // This is when all the draw calls have been issued (all the CPU work is done).
   uint64_t draw_calls_end_time = GetTimeUs();
 
@@ -178,6 +176,8 @@ void Renderer::RenderFrameEnd() {
     last_stat_time_us_ = render_context_.frame_start_time;
   }
   render_context_.last_frame_time_us = render_context_.frame_start_time;
+
+  SDL_GL_SwapWindow(window);
 }
 
 void Renderer::MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t y_to) {
