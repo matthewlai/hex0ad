@@ -46,7 +46,9 @@
 #include <windows.h>
 #undef ERROR
 #else
-#define APIENTRY
+#ifndef APIENTRY
+	#define APIENTRY
+#endif
 #endif
 
 #endif // PLATFORM_INCLUDES_H

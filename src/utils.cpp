@@ -28,6 +28,7 @@ std::string ReadWholeFileString(const std::string& path) {
   return buf;
 }
 
+#ifdef HAVE_GLEW
 void APIENTRY GlDebugOutput(GLenum source, 
                             GLenum type, 
                             unsigned int id, 
@@ -71,3 +72,4 @@ void APIENTRY GlDebugOutput(GLenum source,
 
   logger.Log(level, "[OpenGL] (%, %) %", log_severity, id, message);
 }
+#endif

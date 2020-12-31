@@ -23,9 +23,16 @@ constexpr static float kDefaultEyeAzimuth = 0.0f;
 constexpr static float kDefaultEyeElevation = 45.0f;
 constexpr static float kZoomSpeed = 0.1f;
 
-constexpr static int kShadowMapSize = 2048;
+constexpr static int kShadowMapSize = 4096;
 
 constexpr bool kDebugRenderDepth = false;
+}
+
+/*static*/ void Renderable::SetLightParams(RenderContext* context, ShaderProgram* shader) {
+  shader->SetUniform("light_transform"_name, context->light_transform);
+  shader->SetUniform("light_pos"_name, context->light_pos);
+  shader->SetUniform("eye_pos"_name, context->eye_pos);
+  shader->SetUniform("shadow_texture"_name, kShadowTextureUnit);
 }
 
 TestTriangleRenderable::TestTriangleRenderable() {

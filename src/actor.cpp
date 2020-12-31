@@ -99,7 +99,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
   shader->SetUniform("mvp"_name, mvp);
 
-  shader->SetUniform("light_transform"_name, context->light_transform);
+  Renderable::SetLightParams(context, shader);
 
   if (shadow_pass) {
     UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
@@ -114,8 +114,6 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
     glm::vec3 player_colour(0.0f, 0.0f, 1.0f);
     shader->SetUniform("player_colour"_name, player_colour);
-    shader->SetUniform("light_pos"_name, context->light_pos);
-    shader->SetUniform("eye_pos"_name, context->eye_pos);
 
     // Graphics settings.
     #define GraphicsSetting(upper, lower, type, default, toggle_key) \
@@ -131,32 +129,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
     TextureManager::GetInstance()->BindTexture(textures.base_texture, GL_TEXTURE0);
 
-    // Texture unit 1 for the normal texture.
-    if (!textures.norm_texture.empty()) {
-      TextureManager::GetInstance()->BindTexture(textures.norm_texture, GL_TEXTURE1);
-    } else {
-      shader->SetUniform("use_normal_map"_name, 0);
-    }
-
-    // Texture unit 2 for the spec texture
-    if (!textures.spec_texture.empty()) {
-      TextureManager::GetInstance()->BindTexture(textures.spec_texture, GL_TEXTURE2);
-    } else {
-      shader->SetUniform("use_specular_highlight"_name, 0);
-    }
-
-    // Texture unit 3 for the spec texture
-    if (!textures.ao_texture.empty()) {
-      TextureManager::GetInstance()->BindTexture(textures.ao_texture, GL_TEXTURE3);
-    } else {
-      shader->SetUniform("use_ao_map"_name, 0);
-    }
-
-    shader->SetUniform("base_texture"_name, 0);
-    shader->SetUniform("norm_texture"_name, 1);
-    shader->SetUniform("spec_texture"_name, 2);
-    shader->SetUniform("ao_texture"_name, 3);
-    shader->SetUniform("shadow_texture"_name, kShadowTextureUnit);
+    TextureManager::GetInstance()->UseTextureSet(shader, textures);
 
     UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
     UseVBO(GL_ARRAY_BUFFER, 1, GL_FLOAT, 3, data.normals_vbo_id);
@@ -239,23 +212,7 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
     }
 
     if (!shadow_pass) {
-      for (const auto* texture : *variant->textures()) {
-        auto texture_name = texture->name()->str();
-        auto texture_file = texture->file()->str();
-        if (texture_name == "baseTex") {
-          LOG_DEBUG("baseTex found: %", texture_file);
-          textures.base_texture = texture_file;
-        } else if (texture_name == "normTex") {
-          LOG_DEBUG("normTex found: %", texture_file);
-          textures.norm_texture = texture_file;
-        } else if (texture_name == "specTex") {
-          LOG_DEBUG("specTex found: %", texture_file);
-          textures.spec_texture = texture_file;
-        } else if (texture_name == "aoTex") {
-          LOG_DEBUG("aoTex found: %", texture_file);
-          textures.ao_texture = texture_file;
-        }
-      }
+      textures = TextureManager::GetInstance()->LoadTextures(*variant->textures(), textures);
     }
 
     for (const auto* prop : *variant->props()) {

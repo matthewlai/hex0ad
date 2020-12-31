@@ -7,6 +7,7 @@ in mat3 tbn;
 in vec3 norm_world_to_light;
 in vec3 norm_world_to_eye;
 in float light_distance_100;
+in float depth_bias_multiplier;
 
 uniform sampler2D base_texture;
 uniform sampler2D norm_texture;
@@ -18,15 +19,20 @@ uniform bool use_lighting;
 uniform bool use_specular_highlight;
 uniform bool use_normal_map;
 uniform bool use_ao_map;
+uniform bool use_shadows;
 
 uniform vec3 player_colour;
 
 // We scale depth bias by distance so zooming won't affect peter-paning.
 // Increasing this decreases shadow artifact when light hits almost parallel to a surface,
 // but increases peter-paning.
-const float kDepthBias = 0.0015f;
+const float kDepthBias = 0.005f;
 
 float shadow() {
+  if (!use_shadows) {
+    return 0.0f;
+  }
+
   vec3 shadow_tex_coords = (light_space_pos.xyz / light_space_pos.w) * 0.5f + 0.5f;
 
   // TODO: is there a more efficient way to do this?
@@ -37,7 +43,7 @@ float shadow() {
 
   float depth_in_map = texture(shadow_texture, shadow_tex_coords.xy).r;
   float current_depth = shadow_tex_coords.z;
-  float depth_bias = kDepthBias / light_distance_100;
+  float depth_bias = kDepthBias / light_distance_100 * depth_bias_multiplier;
   return (current_depth - depth_bias) > depth_in_map ? 1.0f : 0.0f;
 }
 
@@ -46,7 +52,7 @@ vec3 mix_colour(vec3 ambient, vec3 diffuse, vec3 specular) {
   return clamp(ambient + (diffuse + specular) * inv_in_shadow, 0.0, 1.0);
 }
 
-vec4 compute_lighting(bool use_player_colour, float ao_strength, float ambient_intensity, float directional_intensity, float shininess) {
+vec4 compute_lighting(bool use_player_colour, float ao_strength, vec3 ambient_light, float directional_intensity, float shininess) {
   vec4 colour = texture(base_texture, tex_coords);
   vec3 base_colour = colour.rgb;
 
@@ -77,7 +83,7 @@ vec4 compute_lighting(bool use_player_colour, float ao_strength, float ambient_i
       spec = spec_colour * spec_power;
     }
 
-    vec3 ambient = ambient_intensity * base_colour;
+    vec3 ambient = ambient_light * base_colour;
 
     if (use_ao_map) {
       vec3 ao = texture(ao_texture, ao_tex_coords).rrr;

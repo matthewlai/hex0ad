@@ -54,6 +54,9 @@ class Renderable {
     #undef GraphicsSetting
   };
   virtual void Render(RenderContext* context) = 0;
+
+  // Set light_pos, eye_pos, shadow texture, and light transform uniforms from render_context_.
+  static void SetLightParams(RenderContext* context, ShaderProgram* shader);
 };
 
 class TestTriangleRenderable : public Renderable {

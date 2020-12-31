@@ -51,8 +51,10 @@ SDL_GLContext InitSDL() {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
   #endif
 
+  #ifdef HAVE_GLEW
   // Try to get debug context if we can.
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+  #endif
 
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);

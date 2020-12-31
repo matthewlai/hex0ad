@@ -4,7 +4,10 @@
 #include <map>
 #include <string>
 
+#include "texture_generated.h"
+
 #include "platform_includes.h"
+#include "shaders.h"
 #include "utils.h"
 
 struct TextureSet {
@@ -34,6 +37,10 @@ class TextureManager {
   // Data is copied to the sub-image at (0, 0) if width and height are
   // smaller than the texture's size.
   void StreamData(uint8_t* data, int width, int height);
+
+  TextureSet LoadTextures(const flatbuffers::Vector<flatbuffers::Offset<data::Texture>>& textures, const TextureSet& existing = TextureSet());
+
+  void UseTextureSet(ShaderProgram* shader, const TextureSet& textures);
 
  private:
   TextureManager() {}

@@ -154,7 +154,9 @@ class LinearCache {
   std::vector<V> values_;
 };
 
+#ifdef HAVE_GLEW
 // For OpenGL debugging. This is adapted from https://learnopengl.com/In-Practice/Debugging
 void APIENTRY GlDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char *message, const void *userParam);
+#endif
 
 #endif // UTILS_H

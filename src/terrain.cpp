@@ -36,25 +36,7 @@ TextureSet* TerrainTextureSet(const std::string& path) {
         ReadWholeFile(std::string(kTerrainPathPrefix) + path);
     const data::Terrain* terrain_data = data::GetTerrain(raw_buffer.data());
 
-    TextureSet textures;
-
-    for (const auto* texture : *terrain_data->textures()) {
-      auto texture_name = texture->name()->str();
-      auto texture_file = texture->file()->str();
-      if (texture_name == "baseTex") {
-        LOG_DEBUG("baseTex found: %", texture_file);
-        textures.base_texture = texture_file;
-      } else if (texture_name == "normTex") {
-        LOG_DEBUG("normTex found: %", texture_file);
-        textures.norm_texture = texture_file;
-      } else if (texture_name == "specTex") {
-        LOG_DEBUG("specTex found: %", texture_file);
-        textures.spec_texture = texture_file;
-      } else if (texture_name == "aoTex") {
-        LOG_DEBUG("aoTex found: %", texture_file);
-        textures.ao_texture = texture_file;
-      }
-    }
+    TextureSet textures = TextureManager::GetInstance()->LoadTextures(*terrain_data->textures());
 
     it = cache.insert(std::make_pair(path, textures)).first;
   }
@@ -182,8 +164,7 @@ void Terrain::Render(RenderContext* context) {
 
   shader_->Activate();
 
-  shader_->SetUniform("light_pos"_name, context->light_pos);
-  shader_->SetUniform("eye_pos"_name, context->eye_pos);
+  SetLightParams(context, shader_);
 
   // Graphics settings.
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
@@ -193,35 +174,10 @@ void Terrain::Render(RenderContext* context) {
 
   TextureSet* textures = TerrainTextureSet(kTerrainPaths[terrain_selection_]);
 
-  TextureManager::GetInstance()->BindTexture(textures->base_texture, GL_TEXTURE0);
-  shader_->SetUniform("base_texture"_name, 0);
-
-  if (!textures->spec_texture.empty() && context->use_specular_highlight) {
-    TextureManager::GetInstance()->BindTexture(textures->spec_texture, GL_TEXTURE1);
-    shader_->SetUniform("spec_texture"_name, 1);
-  } else {
-    shader_->SetUniform("use_specular_highlight"_name, 0);
-  }
-
-  if (!textures->norm_texture.empty() && context->use_normal_map) {
-    TextureManager::GetInstance()->BindTexture(textures->norm_texture, GL_TEXTURE2);
-    shader_->SetUniform("norm_texture"_name, 2);
-  } else {
-    shader_->SetUniform("use_normal_map"_name, 0);
-  }
-
-  if (!textures->norm_texture.empty() && context->use_normal_map) {
-    TextureManager::GetInstance()->BindTexture(textures->norm_texture, GL_TEXTURE3);
-    shader_->SetUniform("ao_texture"_name, 3);
-  } else {
-    shader_->SetUniform("use_ao_map"_name, 0);
-  }
-
-  shader_->SetUniform("shadow_texture"_name, kShadowTextureUnit);
+  TextureManager::GetInstance()->UseTextureSet(shader_, *textures);
 
   glm::mat4 mvp = context->projection * context->view;
   shader_->SetUniform("mvp"_name, mvp);
-  shader_->SetUniform("light_transform"_name, context->light_transform);
   shader_->SetUniform("is_edge"_name, 0);
   UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, vertices_vbo_id_);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);

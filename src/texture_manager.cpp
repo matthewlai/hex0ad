@@ -96,3 +96,52 @@ void TextureManager::StreamData(uint8_t* data, int width, int height) {
   glTexSubImage2D(GL_TEXTURE_2D, /*level=*/0, /*xoffset=*/0, /*yoffset=*/0, width, height,
                   GL_RGBA, GL_UNSIGNED_BYTE, data);
 }
+
+TextureSet TextureManager::LoadTextures(const flatbuffers::Vector<flatbuffers::Offset<data::Texture>>& textures,
+                                        const TextureSet& existing) {
+  TextureSet ret = existing;
+  for (const auto* texture : textures) {
+    auto texture_name = texture->name()->str();
+    auto texture_file = texture->file()->str();
+    if (texture_name == "baseTex") {
+      LOG_DEBUG("baseTex found: %", texture_file);
+      ret.base_texture = texture_file;
+    } else if (texture_name == "normTex") {
+      LOG_DEBUG("normTex found: %", texture_file);
+      ret.norm_texture = texture_file;
+    } else if (texture_name == "specTex") {
+      LOG_DEBUG("specTex found: %", texture_file);
+      ret.spec_texture = texture_file;
+    } else if (texture_name == "aoTex") {
+      LOG_DEBUG("aoTex found: %", texture_file);
+      ret.ao_texture = texture_file;
+    }
+  }
+  return ret;
+}
+
+void TextureManager::UseTextureSet(ShaderProgram* shader, const TextureSet& textures) {
+  BindTexture(textures.base_texture, GL_TEXTURE0);
+  shader->SetUniform("base_texture"_name, 0);
+
+  if (!textures.spec_texture.empty()) {
+    TextureManager::GetInstance()->BindTexture(textures.spec_texture, GL_TEXTURE1);
+    shader->SetUniform("spec_texture"_name, 1);
+  } else {
+    shader->SetUniform("use_specular_highlight"_name, 0);
+  }
+
+  if (!textures.norm_texture.empty()) {
+    TextureManager::GetInstance()->BindTexture(textures.norm_texture, GL_TEXTURE2);
+    shader->SetUniform("norm_texture"_name, 2);
+  } else {
+    shader->SetUniform("use_normal_map"_name, 0);
+  }
+
+  if (!textures.norm_texture.empty()) {
+    TextureManager::GetInstance()->BindTexture(textures.norm_texture, GL_TEXTURE3);
+    shader->SetUniform("ao_texture"_name, 3);
+  } else {
+    shader->SetUniform("use_ao_map"_name, 0);
+  }
+}

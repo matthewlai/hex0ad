@@ -16,6 +16,7 @@ out mat3 tbn;
 out vec4 light_space_pos;
 out vec3 normal_interpo;
 out float light_distance_100;
+out float depth_bias_multiplier;
 
 void compute_light_space(vec3 world_pos) {
   light_space_pos = light_transform * vec4(world_pos, 1.0);
@@ -27,6 +28,7 @@ void compute_light_outputs(vec3 world_pos, vec3 normal) {
   norm_world_to_light = normalize(light_pos - world_pos);
   norm_world_to_eye = normalize(eye_pos - world_pos);
   light_distance_100 = distance(light_pos, world_pos) * 0.01f;
+  depth_bias_multiplier = max((1.0f - dot(normal, norm_world_to_light)), 0.1f);
 }
 
 void set_normal(vec3 normal) {
