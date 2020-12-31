@@ -139,12 +139,16 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     glViewport(0, 0, kShadowMapSize, kShadowMapSize);
     glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb_);
     glClear(GL_DEPTH_BUFFER_BIT);
+
+    // Cool little trick to reduce shadow artifacts
+    // https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
+    //glCullFace(GL_FRONT);
   }
 
   float light_distance = glm::length(render_context_.light_pos);
   float shadow_near_z = 0.0f;
-  float shadow_far_z = 4.0f * light_distance;
-  float window_size = 50.0f;
+  float shadow_far_z = 4.0f * light_distance + 100.0f;
+  float window_size = 0.5f * light_distance + 10.0f;
   glm::mat4 light_projection = glm::ortho(-window_size, window_size, -window_size, window_size, shadow_near_z, shadow_far_z);
   glm::mat4 light_view = glm::lookAt(render_context_.light_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
   render_context_.view = light_view;
@@ -161,6 +165,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, window_width, window_height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glCullFace(GL_BACK);
 
     glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
 
@@ -211,15 +216,11 @@ glm::vec3 Renderer::EyePos() {
 }
 
 glm::vec3 Renderer::LightPos() {
-  // We are using directional lights, so only direction to objects matter, which is norm(LightPos).
-  // We want to move the light with the camera, so we do that calculation first to figure out where
-  // the light should be in world space, then normalize. This makes shadow calculations much easier.
-  // We keep the light at some distance from the origin 
   glm::vec3 eye_to_centre = view_centre_ - render_context_.eye_pos;
   glm::vec3 light_pos = glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
       + EyePos();
   light_pos += glm::vec3(0.0f, 0.0f, 1.3f * render_context_.eye_pos.z);
-  return glm::normalize(light_pos) * 100.0f;
+  return light_pos;
 }
 
 glm::vec3 Renderer::UnProjectToXY(int32_t x, int32_t y) {

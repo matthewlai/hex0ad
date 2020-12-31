@@ -99,6 +99,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
   shader->SetUniform("mvp"_name, mvp);
 
+  shader->SetUniform("light_transform"_name, context->light_transform);
+
   if (shadow_pass) {
     UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.indices_vbo_id);
@@ -154,6 +156,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     shader->SetUniform("norm_texture"_name, 1);
     shader->SetUniform("spec_texture"_name, 2);
     shader->SetUniform("ao_texture"_name, 3);
+    shader->SetUniform("shadow_texture"_name, kShadowTextureUnit);
 
     UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
     UseVBO(GL_ARRAY_BUFFER, 1, GL_FLOAT, 3, data.normals_vbo_id);

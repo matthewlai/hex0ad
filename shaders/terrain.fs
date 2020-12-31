@@ -13,11 +13,11 @@ out vec4 frag_colour;
 #include "light.finc"
 
 void main() {
-  vec3 colour = compute_lighting(/*ao_strength=*/0.0f, kAmbientLight, kDirectionalLightIntensity, kShininess);
+  vec4 colour = compute_lighting(/*use_player_colour=*/ false, /*ao_strength=*/0.0f, kAmbientLight, kDirectionalLightIntensity, kShininess);
 
   if (is_edge) {
   	colour = colour * 0.8f;
   }
 
-  frag_colour = vec4(colour, 1.0f);
+  frag_colour = colour;
 }

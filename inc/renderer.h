@@ -99,8 +99,8 @@ class Renderer {
     if (eye_distance_target_ > 1000.0f) {
       eye_distance_target_ = 1000.0f;
     }
-    if (eye_distance_target_ < 5.0f) {
-      eye_distance_target_ = 5.0f;
+    if (eye_distance_target_ < 25.0f) {
+      eye_distance_target_ = 25.0f;
     }
   }
 

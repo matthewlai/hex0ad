@@ -6,6 +6,7 @@ in mat3 tbn;
 
 in vec3 norm_world_to_light;
 in vec3 norm_world_to_eye;
+in float light_distance_100;
 
 uniform sampler2D base_texture;
 uniform sampler2D norm_texture;
@@ -18,6 +19,13 @@ uniform bool use_specular_highlight;
 uniform bool use_normal_map;
 uniform bool use_ao_map;
 
+uniform vec3 player_colour;
+
+// We scale depth bias by distance so zooming won't affect peter-paning.
+// Increasing this decreases shadow artifact when light hits almost parallel to a surface,
+// but increases peter-paning.
+const float kDepthBias = 0.0015f;
+
 float shadow() {
   vec3 shadow_tex_coords = (light_space_pos.xyz / light_space_pos.w) * 0.5f + 0.5f;
 
@@ -29,7 +37,8 @@ float shadow() {
 
   float depth_in_map = texture(shadow_texture, shadow_tex_coords.xy).r;
   float current_depth = shadow_tex_coords.z;
-  return current_depth > depth_in_map ? 1.0f : 0.0f;
+  float depth_bias = kDepthBias / light_distance_100;
+  return (current_depth - depth_bias) > depth_in_map ? 1.0f : 0.0f;
 }
 
 vec3 mix_colour(vec3 ambient, vec3 diffuse, vec3 specular) {
@@ -37,8 +46,18 @@ vec3 mix_colour(vec3 ambient, vec3 diffuse, vec3 specular) {
   return clamp(ambient + (diffuse + specular) * inv_in_shadow, 0.0, 1.0);
 }
 
-vec3 compute_lighting(float ao_strength, float ambient_intensity, float directional_intensity, float shininess) {
-  vec3 colour = texture(base_texture, tex_coords).rgb;
+vec4 compute_lighting(bool use_player_colour, float ao_strength, float ambient_intensity, float directional_intensity, float shininess) {
+  vec4 colour = texture(base_texture, tex_coords);
+  vec3 base_colour = colour.rgb;
+
+  // Player colour computation:
+  // https://wildfiregames.com/forum/topic/18340-lowpoly-tips/
+  vec3 player_colour_mixed = base_colour * player_colour;
+
+  if (use_player_colour) {
+    base_colour = base_colour * colour.a + player_colour_mixed * (1.0 - colour.a);
+  }
+
   vec3 normal = normal_interpo;
 
   if (use_normal_map) {
@@ -48,26 +67,29 @@ vec3 compute_lighting(float ao_strength, float ambient_intensity, float directio
   if (use_lighting) {
     vec3 norm = normalize(normal);
     float diffuse_factor = max(dot(norm, norm_world_to_light), 0.0f) * directional_intensity;
-    vec3 diffuse = diffuse_factor * colour;
+    vec3 diffuse = diffuse_factor * base_colour;
 
     vec3 spec = vec3(0.0, 0.0, 0.0);
     if (use_specular_highlight) {
-      vec4 s = texture(spec_texture, tex_coords);
-      vec3 spec_colour = s.rgb;
+      vec3 spec_colour = texture(spec_texture, tex_coords).rgb;
       vec3 reflect_dir = reflect(-norm_world_to_light, norm);
       float spec_power = pow(max(dot(norm_world_to_eye, reflect_dir), 0.0), shininess);
       spec = spec_colour * spec_power;
     }
 
-    vec3 ambient = ambient_intensity * colour;
+    vec3 ambient = ambient_intensity * base_colour;
 
     if (use_ao_map) {
       vec3 ao = texture(ao_texture, ao_tex_coords).rrr;
       ao = mix(vec3(1.0), ao * 2.0, ao_strength);
-      ambient *= ao;
+      ambient.rgb *= ao;
     }
 
-    colour = mix_colour(ambient, diffuse, spec);
+    if (use_player_colour) {
+      colour = vec4(mix_colour(ambient, diffuse, spec), 1.0f);
+    } else {
+      colour = vec4(mix_colour(ambient, diffuse, spec), colour.a);
+    }
   }
 
   return colour;
