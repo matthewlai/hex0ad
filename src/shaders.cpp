@@ -3,6 +3,7 @@
 #include <fstream>
 #include <map>
 #include <regex>
+#include <sstream>
 #include <string>
 
 #include "logger.h"
@@ -15,7 +16,20 @@ struct ShaderCompileResult {
   GLuint shader = 0;
   bool success = false;
   std::string log;
+  std::string processed_source;
 };
+
+void PrintSourceWithLineNumbers(const std::string& source) {
+  std::stringstream ss(source);
+  std::stringstream ss_out;
+  std::string line;
+  int line_number = 1;
+  while (std::getline(ss, line)) {
+    ss_out << line_number << '\t' << line + "\n";
+    ++line_number;
+  }
+  LOG_ERROR("Processed source:\n%", ss_out.str());
+}
 
 std::string Replace(const std::string& s, const std::string& search,
                     const std::string& replace) {
@@ -60,6 +74,8 @@ ShaderCompileResult CompileShader(GLenum shader_type,
   for (const auto& [find, replace] : replacements) {
     source_proc = Replace(source_proc, find, replace);
   }
+
+  result.processed_source = source_proc;
 
   const char* source_cstr = source_proc.c_str();
   glShaderSource(result.shader, 1, &source_cstr, nullptr);
@@ -131,6 +147,7 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
     vertex_shader_ = compile_result.shader;
   } else {
     LOG_ERROR("Compilation failed:\n%", compile_result.log);
+    PrintSourceWithLineNumbers(compile_result.processed_source);
     throw std::runtime_error(
         "Shader compilation failed: "s + compile_result.log);
   }
@@ -143,6 +160,7 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
     fragment_shader_ = compile_result.shader;
   } else {
     LOG_ERROR("Compilation failed:\n%", compile_result.log);
+    PrintSourceWithLineNumbers(compile_result.processed_source);
     throw std::runtime_error(
         "Shader compilation failed: "s + compile_result.log);
   }
