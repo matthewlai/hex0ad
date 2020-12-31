@@ -29,7 +29,6 @@ class UI : public Renderable {
   bool initialized_;
   GLuint vertices_vbo_id_;
   GLuint indices_vbo_id_;
-  std::size_t num_indices_;
 
   std::vector<std::string> debug_text_;
 

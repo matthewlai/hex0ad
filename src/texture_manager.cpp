@@ -92,6 +92,22 @@ GLuint TextureManager::MakeDepthTexture(int width, int height) {
   return texture_id;
 }
 
+void TextureManager::ResizeStreamingTexture(GLuint texture_id, int width, int height) {
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  glTexImage2D(GL_TEXTURE_2D, /*level=*/0, /*internalFormat=*/GL_RGBA, width, height,
+               0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  CHECK_GL_ERROR;
+}
+
+void TextureManager::ResizeDepthTexture(GLuint texture_id, int width, int height) {
+  glActiveTexture(GL_TEXTURE0);
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  glTexImage2D(GL_TEXTURE_2D, /*level=*/0, /*internalFormat=*/GL_DEPTH_COMPONENT32F, width, height,
+               0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+  CHECK_GL_ERROR;
+}
+
 void TextureManager::StreamData(uint8_t* data, int width, int height) {
   glTexSubImage2D(GL_TEXTURE_2D, /*level=*/0, /*xoffset=*/0, /*yoffset=*/0, width, height,
                   GL_RGBA, GL_UNSIGNED_BYTE, data);

@@ -170,7 +170,7 @@ bool main_loop() {
           quit = true;
           break;
 #ifndef __EMSCRIPTEN__
-        case SDLK_f:
+        case SDLK_F11:
           g_state.fullscreen ^= 1;
           if (g_state.fullscreen) {
             SDL_SetWindowFullscreen(g_state.window, SDL_WINDOW_FULLSCREEN_DESKTOP);

@@ -29,6 +29,10 @@ class ShaderProgram {
     glUniform1f(GetUniformLocation(name), x);
   }
 
+  void SetUniform(const NameLiteral& name, const glm::vec2& x) {
+    glUniform2fv(GetUniformLocation(name), 1, glm::value_ptr(x));
+  }
+
   void SetUniform(const NameLiteral& name, const glm::vec3& x) {
     glUniform3fv(GetUniformLocation(name), 1, glm::value_ptr(x));
   }

@@ -26,7 +26,29 @@ uniform vec3 player_colour;
 // We scale depth bias by distance so zooming won't affect peter-paning.
 // Increasing this decreases shadow artifact when light hits almost parallel to a surface,
 // but increases peter-paning.
-const float kDepthBias = 0.005f;
+const float kDepthBias = 0.004f;
+
+// N=3 kernel
+/*
+const int kDepthMapFilterSize = 3;
+const float kDepthMapFilterMultiplier = 1.0f / 16.0f;
+const float[] kDepthMapFilter = float[](
+  1, 2, 1,
+  2, 4, 2,
+  1, 2, 1
+);
+*/
+
+// N=5 kernel
+const int kDepthMapFilterSize = 5;
+const float kDepthMapFilterMultiplier = 1.0f / 256.0f;
+const float[] kDepthMapFilter = float[](
+  1,  4,  6,  4,  1,
+  4, 16, 24, 16,  4,
+  6, 24, 36, 24,  6,
+  4, 16, 24, 16,  4,
+  1,  4,  6,  4,  1
+);
 
 float shadow() {
   if (!use_shadows) {
@@ -41,10 +63,20 @@ float shadow() {
     return 0.0f;
   }
 
-  float depth_in_map = texture(shadow_texture, shadow_tex_coords.xy).r;
-  float current_depth = shadow_tex_coords.z;
   float depth_bias = kDepthBias / light_distance_100 * depth_bias_multiplier;
-  return (current_depth - depth_bias) > depth_in_map ? 1.0f : 0.0f;
+  float shadow = 0.0f;
+
+  int half_size = kDepthMapFilterSize / 2;
+  for (int x_offset = -half_size; x_offset <= half_size; ++x_offset) {
+    for (int y_offset = -half_size; y_offset <= half_size; ++y_offset) {
+      float depth_in_map = textureOffset(shadow_texture, shadow_tex_coords.xy, ivec2(x_offset, y_offset)).r;
+      float current_depth = shadow_tex_coords.z;
+      float weight = kDepthMapFilter[(y_offset + half_size) * kDepthMapFilterSize + (x_offset + half_size)] * kDepthMapFilterMultiplier;
+      shadow += (current_depth - depth_bias) > depth_in_map ? weight : 0.0f;
+    }
+  }
+
+  return shadow;
 }
 
 vec3 mix_colour(vec3 ambient, vec3 diffuse, vec3 specular) {

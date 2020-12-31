@@ -23,7 +23,7 @@ constexpr static float kDefaultEyeAzimuth = 0.0f;
 constexpr static float kDefaultEyeElevation = 45.0f;
 constexpr static float kZoomSpeed = 0.1f;
 
-constexpr static int kShadowMapSize = 4096;
+constexpr static int kShadowMapSize = 2048;
 
 constexpr bool kDebugRenderDepth = false;
 }
@@ -106,11 +106,18 @@ Renderer::Renderer() {
 }
 
 void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
+  int window_width;
+  int window_height;
+
   if (first_frame_) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     first_frame_ = false;
     window_ = SDL_GL_GetCurrentWindow();
+    SDL_GL_GetDrawableSize(window_, &window_width, &window_height);
+
+    last_window_width_ = window_width;
+    last_window_height_ = window_height;
 
     glGenFramebuffers(1, &shadow_map_fb_);
     shadow_map_texture_ = TextureManager::GetInstance()->MakeDepthTexture(kShadowMapSize, kShadowMapSize);
@@ -121,13 +128,52 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     GLenum no_buffer = GL_NONE;
     glDrawBuffers(1, &no_buffer);
     glReadBuffer(GL_NONE);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      LOG_ERROR("Framebuffer incomplete");
+    }
+
+    glGenFramebuffers(1, &geometry_fb_);
+    geometry_colour_texture_ = TextureManager::GetInstance()->MakeStreamingTexture(window_width, window_height);
+    geometry_depth_texture_ = TextureManager::GetInstance()->MakeDepthTexture(window_width, window_height);
+    TextureManager::GetInstance()->BindTexture(geometry_colour_texture_, GL_TEXTURE0 + kGeometryColourTextureUnit);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, geometry_fb_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, geometry_colour_texture_, /*lod=*/0);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, geometry_depth_texture_, /*lod=*/0);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      LOG_ERROR("Framebuffer incomplete");
+    }
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    fxaa_shader_ = GetShader("shaders/passthrough.vs", "shaders/fxaa.fs");
+
+    std::vector<float> positions;
+    positions.push_back(0.0f); positions.push_back(0.0f); // v0
+    positions.push_back(0.0f); positions.push_back(1.0f); // v1
+    positions.push_back(1.0f); positions.push_back(0.0f); // v2
+    positions.push_back(1.0f); positions.push_back(1.0f); // v3
+
+    std::vector<GLuint> indices;
+    indices.push_back(0); indices.push_back(2); indices.push_back(1);
+    indices.push_back(3); indices.push_back(1); indices.push_back(2);
+
+    quad_vertices_vbo_id_ = MakeAndUploadVBO(GL_ARRAY_BUFFER, positions);
+    quad_indices_vbo_id_ = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, indices);
   }
 
-  int window_width;
-  int window_height;
   SDL_GL_GetDrawableSize(window_, &window_width, &window_height);
 
+  if (window_width != last_window_width_ || window_height != last_window_height_) {
+    last_window_width_ = window_width;
+    last_window_height_ = window_height;
+
+    // Resize our textures.
+    TextureManager::GetInstance()->ResizeStreamingTexture(geometry_colour_texture_, window_width, window_height);
+    TextureManager::GetInstance()->ResizeDepthTexture(geometry_depth_texture_, window_width, window_height);
+  }
+
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
   glDisable(GL_BLEND);
@@ -146,10 +192,6 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     glViewport(0, 0, kShadowMapSize, kShadowMapSize);
     glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb_);
     glClear(GL_DEPTH_BUFFER_BIT);
-
-    // Cool little trick to reduce shadow artifacts
-    // https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
-    //glCullFace(GL_FRONT);
   }
 
   float light_distance = glm::length(render_context_.light_pos);
@@ -169,10 +211,13 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
 
   if (!kDebugRenderDepth) {
     // Geometry pass
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (render_context_.use_fxaa) {
+      glBindFramebuffer(GL_FRAMEBUFFER, geometry_fb_);
+    } else {
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
     glViewport(0, 0, window_width, window_height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glCullFace(GL_BACK);
 
     glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
 
@@ -187,6 +232,20 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     render_context_.pass = RenderPass::kGeometry;
     for (auto* renderable : renderables) {
       renderable->Render(&render_context_);
+    }
+
+    // FXAA pass.
+    if (render_context_.use_fxaa) {
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glViewport(0, 0, window_width, window_height);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+      glDisable(GL_DEPTH_TEST);
+
+      fxaa_shader_->Activate();
+      fxaa_shader_->SetUniform("tex", kGeometryColourTextureUnit);
+      fxaa_shader_->SetUniform("rcp_target_size", glm::vec2(1.0f / window_width, 1.0f / window_height));
+
+      DrawQuad();
     }
 
     // UI pass.
@@ -210,6 +269,13 @@ void Renderer::MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t 
   auto diff = from - to;
   view_centre_ += diff;
   view_centre_.z = 0;
+}
+
+void Renderer::DrawQuad() {
+  UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 2, quad_vertices_vbo_id_);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quad_indices_vbo_id_);
+  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (const void*) 0);
+  glDisableVertexAttribArray(0);
 }
 
 glm::vec3 Renderer::EyePos() {

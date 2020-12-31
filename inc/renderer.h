@@ -20,12 +20,17 @@ constexpr uint64_t kRenderStatsPeriod = 100000;
 
 constexpr GLint kShadowTextureUnit = 8;
 
+// For Geometry pass output, FXAA pass input.
+constexpr GLint kGeometryColourTextureUnit = 9;
+
 enum class RenderPass {
   // Shadow map pass. Depth testing enabled, MVP is ortho from light position.
   kShadow,
 
   // Standard geometry pass with normal MVP, depth testing enabled, alpha blending disabled.
   kGeometry,
+
+  // FXAA pass (no renderables are requested to render in this pass).
 
   // UI pass with depth testing disabled, and alpha blending enabled. MVP ignored since we will be rendering in NDC directly.
   kUi,
@@ -109,6 +114,8 @@ class Renderer {
 
   void MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t y_to);
 
+  void DrawQuad();
+
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
     void Toggle ## upper() { render_context_.lower ^= 0x1; }
     GRAPHICS_SETTINGS
@@ -138,8 +145,22 @@ class Renderer {
   bool first_frame_;
   SDL_Window* window_;
 
+  int last_window_width_;
+  int last_window_height_;
+
+  ShaderProgram* fxaa_shader_;
+
+  // Target of the shadow map pass.
   GLuint shadow_map_fb_;
   GLuint shadow_map_texture_;
+
+  // Target of the geometry pass.
+  GLuint geometry_fb_;
+  GLuint geometry_colour_texture_;
+  GLuint geometry_depth_texture_;
+
+  GLuint quad_vertices_vbo_id_;
+  GLuint quad_indices_vbo_id_;
 };
 
 template <typename T>

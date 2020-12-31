@@ -67,14 +67,12 @@ void UI::Render(RenderContext* context) {
       LOG_ERROR("Failed to open font: %", TTF_GetError());
     }
 
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     initialized_ = true;
   }
 
   shader_->Activate();
-
-  glEnable(GL_BLEND);
-  glDisable(GL_DEPTH_TEST);
-  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
   for (std::size_t i = 0; i < debug_text_.size(); ++i) {
     if (debug_text_[i].empty()) {
@@ -93,9 +91,6 @@ void UI::Render(RenderContext* context) {
 
     SDL_FreeSurface(text);
   }
-
-  glEnable(GL_DEPTH_TEST);
-  glDisable(GL_BLEND);
 
   glDisableVertexAttribArray(0);
 }
