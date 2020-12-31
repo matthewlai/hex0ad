@@ -144,7 +144,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
   float light_distance = glm::length(render_context_.light_pos);
   float shadow_near_z = 0.0f;
   float shadow_far_z = 4.0f * light_distance;
-  glm::mat4 light_projection = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, shadow_near_z, shadow_far_z);
+  glm::mat4 light_projection = glm::ortho(-50.0f, 50.0f, -50.0f, 50.0f, shadow_near_z, shadow_far_z);
   glm::mat4 light_view = glm::lookAt(render_context_.light_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
   render_context_.view = light_view;
   render_context_.projection = light_projection;
@@ -217,7 +217,7 @@ glm::vec3 Renderer::LightPos() {
   glm::vec3 eye_to_centre = view_centre_ - render_context_.eye_pos;
   glm::vec3 light_pos = glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
       + EyePos();
-  light_pos += glm::vec3(0.0f, 0.0f, 2.0f * render_context_.eye_pos.z);
+  light_pos += glm::vec3(0.0f, 0.0f, 1.3f * render_context_.eye_pos.z);
   return glm::normalize(light_pos) * 100.0f;
 }
 
