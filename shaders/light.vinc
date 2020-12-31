@@ -1,0 +1,39 @@
+uniform highp vec3 light_pos;
+uniform highp vec3 eye_pos;
+
+uniform mat4 light_transform;
+
+// Do all computations that need highp in vertex shader because
+// some devices don't support highp in fragment shader.
+// It's technically slightly wrong to normalize directions per-vertex
+// instead of per-pixel, but it's close enough.
+out vec3 norm_world_to_light;
+out vec3 norm_world_to_eye;
+out vec2 tex_coords;
+out mat3 tbn;
+
+out vec4 light_space_pos;
+out vec3 normal_interpo;
+
+void compute_light_space(vec3 v_position) {
+  light_space_pos = light_transform * vec4(v_position, 1.0);
+}
+
+void compute_light_outputs(vec3 world_pos, vec3 normal) {
+  // We don't have a model matrix for ground. We pre-transform all
+  // vertices so we can render the entire ground in one draw call.
+  norm_world_to_light = normalize(light_pos - world_pos);
+  norm_world_to_eye = normalize(eye_pos - world_pos);
+}
+
+void set_normal(vec3 normal) {
+  normal_interpo = normal;
+}
+
+void set_tex_coords(vec2 coords) {
+  tex_coords = coords;
+}
+
+void set_tbn(mat3 tbn_i) {
+  tbn = tbn_i;
+}

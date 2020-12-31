@@ -184,7 +184,12 @@ void Terrain::Render(RenderContext* context) {
 
   shader_->SetUniform("light_pos"_name, context->light_pos);
   shader_->SetUniform("eye_pos"_name, context->eye_pos);
-  shader_->SetUniform("use_lighting"_name, context->use_lighting);
+
+  // Graphics settings.
+  #define GraphicsSetting(upper, lower, type, default, toggle_key) \
+    shader_->SetUniform(NameLiteral(#lower), context->lower);
+  GRAPHICS_SETTINGS
+  #undef GraphicsSetting
 
   TextureSet* textures = TerrainTextureSet(kTerrainPaths[terrain_selection_]);
 
@@ -194,7 +199,6 @@ void Terrain::Render(RenderContext* context) {
   if (!textures->spec_texture.empty() && context->use_specular_highlight) {
     TextureManager::GetInstance()->BindTexture(textures->spec_texture, GL_TEXTURE1);
     shader_->SetUniform("spec_texture"_name, 1);
-    shader_->SetUniform("use_specular_highlight"_name, 1);
   } else {
     shader_->SetUniform("use_specular_highlight"_name, 0);
   }
@@ -202,9 +206,15 @@ void Terrain::Render(RenderContext* context) {
   if (!textures->norm_texture.empty() && context->use_normal_map) {
     TextureManager::GetInstance()->BindTexture(textures->norm_texture, GL_TEXTURE2);
     shader_->SetUniform("norm_texture"_name, 2);
-    shader_->SetUniform("use_normal_map"_name, 1);
   } else {
     shader_->SetUniform("use_normal_map"_name, 0);
+  }
+
+  if (!textures->norm_texture.empty() && context->use_normal_map) {
+    TextureManager::GetInstance()->BindTexture(textures->norm_texture, GL_TEXTURE3);
+    shader_->SetUniform("ao_texture"_name, 3);
+  } else {
+    shader_->SetUniform("use_ao_map"_name, 0);
   }
 
   shader_->SetUniform("shadow_texture"_name, kShadowTextureUnit);

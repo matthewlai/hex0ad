@@ -37,6 +37,8 @@
 
 std::vector<std::uint8_t> ReadWholeFile(const std::string& path);
 
+std::string ReadWholeFileString(const std::string& path);
+
 // Get steady clock time in microseconds (for durations only).
 inline uint64_t GetTimeUs() {
   using Clock = std::chrono::steady_clock;
@@ -106,6 +108,8 @@ constexpr NameLiteral operator""_name(const char *str, std::size_t len) {
   (void) len;
   return NameLiteral(str);
 }
+
+using namespace std::string_literals;
 
 // Linear cache for very small tables (eg. uniform locations) where
 // either BST or hashing would be slower, and we want good cache

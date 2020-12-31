@@ -12,7 +12,7 @@ const float kShininess = 4.0;
 
 in vec2 tex_coords;
 in vec2 ao_tex_coords;
-in vec3 interp_normal;
+in vec3 normal_interpo;
 in mat3 tbn;
 
 in vec3 norm_world_to_light;
@@ -37,7 +37,7 @@ out vec4 frag_colour;
 void main() {
   vec4 base_colour = texture(base_texture, tex_coords);
 
-  vec3 normal = interp_normal;
+  vec3 normal = normal_interpo;
   if (use_normal_map) {
     normal = normalize(tbn * (texture(norm_texture, tex_coords).xyz * 2.0f - 1.0f));
   }

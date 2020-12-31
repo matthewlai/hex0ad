@@ -15,6 +15,19 @@ std::vector<std::uint8_t> ReadWholeFile(const std::string& path) {
   return buf;
 }
 
+std::string ReadWholeFileString(const std::string& path) {
+  std::ifstream is(path.c_str(), std::ifstream::in | std::ifstream::binary);
+  if (!is) {
+    throw std::runtime_error(std::string("Opening ") + path + " failed: " + strerror(errno));
+  }
+  is.seekg(0, is.end);
+  auto len = is.tellg();
+  is.seekg(0, is.beg);
+  std::string buf(len, '\0');
+  is.read(reinterpret_cast<char*>(buf.data()), len);
+  return buf;
+}
+
 void APIENTRY GlDebugOutput(GLenum source, 
                             GLenum type, 
                             unsigned int id, 

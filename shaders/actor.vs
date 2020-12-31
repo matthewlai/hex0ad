@@ -15,7 +15,7 @@ uniform vec3 eye_pos;
 
 out vec2 tex_coords;
 out vec2 ao_tex_coords;
-out vec3 interp_normal;
+out vec3 normal_interpo;
 out mat3 tbn;
 
 // Do all computations that need highp in vertex shader because
@@ -34,7 +34,7 @@ void main() {
 
   tex_coords = v_tex_coords;
   ao_tex_coords = v_ao_tex_coords;
-  interp_normal = normal;
+  normal_interpo = normal;
 
   vec3 world_pos = (model * vec4(v_position, 1.0)).xyz;
   norm_world_to_light = normalize(light_pos - world_pos);

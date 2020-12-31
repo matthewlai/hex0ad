@@ -2,9 +2,11 @@
 
 #include <fstream>
 #include <map>
+#include <regex>
 #include <string>
 
 #include "logger.h"
+#include "utils.h"
 
 #include "platform_includes.h"
 
@@ -38,10 +40,26 @@ ShaderCompileResult CompileShader(GLenum shader_type,
   }
 
   std::string source_proc = source;
+
+  std::map<std::string, std::string> replacements;
+
   #ifdef USE_OPENGL
   // GLSL ES 3.0 is based on GLSL 3.3.
-  source_proc = Replace(source_proc, "#version 300 es", "#version 330");
+  replacements["#version 300 es"] = "#version 300";
   #endif
+
+  const char* kIncludePattern = R"""(#include\s"(.+)")""";
+  std::regex include_regex(kIncludePattern);
+
+  auto includes_begin = std::sregex_iterator(
+      source_proc.begin(), source_proc.end(), include_regex);
+  for (auto match = includes_begin; match != std::sregex_iterator(); ++match) {
+    replacements[match->str()] = ReadWholeFileString("shaders/"s + match->str(1));
+  }
+
+  for (const auto& [find, replace] : replacements) {
+    source_proc = Replace(source_proc, find, replace);
+  }
 
   const char* source_cstr = source_proc.c_str();
   glShaderSource(result.shader, 1, &source_cstr, nullptr);
@@ -75,7 +93,7 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
 
   if (!vertex_file) {
     LOG_ERROR("Failed to open vertex shader file: %", vertex_shader_file_name);
-    throw std::runtime_error(std::string("Failed to open vertex shader file: ")
+    throw std::runtime_error("Failed to open vertex shader file: "s
                              + vertex_shader_file_name);
   }
 
@@ -83,7 +101,7 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
     LOG_ERROR("Failed to open fragment shader file: %",
               fragment_shader_file_name);
     throw std::runtime_error(
-        std::string("Failed to open fragment shader file: ") +
+        "Failed to open fragment shader file: "s +
         vertex_shader_file_name);
   }
 
@@ -112,9 +130,9 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
     glAttachShader(program_, compile_result.shader);
     vertex_shader_ = compile_result.shader;
   } else {
-    LOG_ERROR("Compilation failed: %", compile_result.log);
+    LOG_ERROR("Compilation failed:\n%", compile_result.log);
     throw std::runtime_error(
-        std::string("Shader compilation failed: ") + compile_result.log);
+        "Shader compilation failed: "s + compile_result.log);
   }
 
   LOG_INFO("Compiling % (fragment shader)", fragment_shader_file_name);
@@ -124,9 +142,9 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
     glAttachShader(program_, compile_result.shader);
     fragment_shader_ = compile_result.shader;
   } else {
-    LOG_ERROR("Compilation failed: %", compile_result.log);
+    LOG_ERROR("Compilation failed:\n%", compile_result.log);
     throw std::runtime_error(
-        std::string("Shader compilation failed: ") + compile_result.log);
+        "Shader compilation failed: "s + compile_result.log);
   }
 
   glLinkProgram(program_);
@@ -141,7 +159,7 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
       glGetProgramInfoLog(program_, log_length, nullptr, &link_log[0]);
       LOG_ERROR("Shader program linking failed: %", link_log);
       throw std::runtime_error(
-          std::string("Shader program linking failed: ") + link_log);
+          "Shader program linking failed: "s + link_log);
     }
   }
 }
