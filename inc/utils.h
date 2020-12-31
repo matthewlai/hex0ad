@@ -2,6 +2,7 @@
 #define UTILS_H
 
 #include <chrono>
+#include <cstdlib>
 #include <cstdint>
 #include <limits>
 #include <ostream>
@@ -31,9 +32,8 @@
     throw std::runtime_error(SDL_GetError());; }} while (0);
 
 #define CHECK_GL_ERROR \
-    do { if (glGetError() != GL_NO_ERROR) { \
-      throw std::runtime_error(std::string("OpenGL error: ") + \
-        std::to_string(glGetError())); } } while (0);
+    do { auto error = glGetError(); if (error != GL_NO_ERROR) { \
+      LOG_ERROR("OpenGL error: % (%:%)", error, __FILE__, __LINE__); abort(); }} while (0);
 
 std::vector<std::uint8_t> ReadWholeFile(const std::string& path);
 
@@ -149,5 +149,8 @@ class LinearCache {
   std::vector<K> keys_;
   std::vector<V> values_;
 };
+
+// For OpenGL debugging. This is adapted from https://learnopengl.com/In-Practice/Debugging
+void APIENTRY GlDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char *message, const void *userParam);
 
 #endif // UTILS_H

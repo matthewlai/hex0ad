@@ -51,9 +51,12 @@ SDL_GLContext InitSDL() {
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
   #endif
 
+  // Try to get debug context if we can.
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-  SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
-  SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
+  //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
+  //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
   g_state.window = SDL_CreateWindow(
       "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -66,6 +69,16 @@ SDL_GLContext InitSDL() {
 #ifdef HAVE_GLEW
   if (glewInit() != GLEW_OK) {
     throw std::runtime_error("Failed to initialize glew");
+  }
+
+  GLint context_flags;
+  glGetIntegerv(GL_CONTEXT_FLAGS, &context_flags);
+  if (context_flags & GL_CONTEXT_FLAG_DEBUG_BIT) {
+    LOG_INFO("GL Context has debug flag, hooking up callback");
+    glEnable(GL_DEBUG_OUTPUT);
+    glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    glDebugMessageCallback(GlDebugOutput, nullptr);
+    glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
   }
 #endif
   

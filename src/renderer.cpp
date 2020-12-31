@@ -9,6 +9,7 @@
 #include "glm/gtx/string_cast.hpp"
 
 #include "platform_includes.h"
+#include "texture_manager.h"
 
 #include <cstddef>
 #include <iomanip>
@@ -21,6 +22,10 @@ constexpr static float kDefaultEyeDistance = 70.0f;
 constexpr static float kDefaultEyeAzimuth = 0.0f;
 constexpr static float kDefaultEyeElevation = 45.0f;
 constexpr static float kZoomSpeed = 0.1f;
+
+constexpr static int kShadowMapSize = 2048;
+
+constexpr bool kDebugRenderDepth = false;
 }
 
 TestTriangleRenderable::TestTriangleRenderable() {
@@ -99,48 +104,86 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     first_frame_ = false;
     window_ = SDL_GL_GetCurrentWindow();
+
+    glGenFramebuffers(1, &shadow_map_fb_);
+    shadow_map_texture_ = TextureManager::GetInstance()->MakeDepthTexture(kShadowMapSize, kShadowMapSize);
+    TextureManager::GetInstance()->BindTexture(shadow_map_texture_, GL_TEXTURE0 + kShadowTextureUnit);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_map_texture_, /*lod=*/0);
+    GLenum no_buffer = GL_NONE;
+    glDrawBuffers(1, &no_buffer);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
   int window_width;
   int window_height;
   SDL_GL_GetDrawableSize(window_, &window_width, &window_height);
 
-  // Geometry pass
-  glViewport(0, 0, window_width, window_height);
-  render_context_.window_width = window_width;
-  render_context_.window_height = window_height;
-
   glEnable(GL_CULL_FACE);
   glEnable(GL_DEPTH_TEST);
   glDisable(GL_BLEND);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  render_context_.window_width = window_width;
+  render_context_.window_height = window_height;
 
   render_context_.eye_pos = EyePos();
   render_context_.light_pos = LightPos();
 
-  glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
+  // Shadow pass
+  if (kDebugRenderDepth) {
+    glViewport(0, 0, window_width, window_height);
+    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+  } else {
+    glViewport(0, 0, kShadowMapSize, kShadowMapSize);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb_);
+    glClear(GL_DEPTH_BUFFER_BIT);
+  }
 
-  float near_z = 0.1f * eye_distance_;
-  float far_z = 10.0f * eye_distance_;
-  glm::mat4 projection = glm::perspective(glm::radians(kFov),
-    static_cast<float>(window_width) / window_height,
-    near_z, far_z);
-
-  render_context_.view = view;
-  render_context_.projection = projection;
-
-  render_context_.pass = RenderPass::kGeometry;
+  float light_distance = glm::length(render_context_.light_pos);
+  float shadow_near_z = 0.0f;
+  float shadow_far_z = 4.0f * light_distance;
+  glm::mat4 light_projection = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, shadow_near_z, shadow_far_z);
+  glm::mat4 light_view = glm::lookAt(render_context_.light_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+  render_context_.view = light_view;
+  render_context_.projection = light_projection;
+  render_context_.pass = RenderPass::kShadow;
   for (auto* renderable : renderables) {
     renderable->Render(&render_context_);
   }
 
-  // UI pass.
-  glEnable(GL_BLEND);
-  glDisable(GL_DEPTH_TEST);
+  render_context_.light_transform = light_projection * light_view;
 
-  render_context_.pass = RenderPass::kUi;
-  for (auto* renderable : renderables) {
-    renderable->Render(&render_context_);
+  if (!kDebugRenderDepth) {
+    // Geometry pass
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, window_width, window_height);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
+
+    float near_z = 0.1f * eye_distance_;
+    float far_z = 10.0f * eye_distance_;
+    glm::mat4 projection =
+        glm::perspective(glm::radians(kFov), static_cast<float>(window_width) / window_height, near_z, far_z);
+
+    render_context_.view = view;
+    render_context_.projection = projection;
+
+    render_context_.pass = RenderPass::kGeometry;
+    for (auto* renderable : renderables) {
+      renderable->Render(&render_context_);
+    }
+
+    // UI pass.
+    glEnable(GL_BLEND);
+    glDisable(GL_DEPTH_TEST);
+
+    render_context_.pass = RenderPass::kUi;
+    for (auto* renderable : renderables) {
+      renderable->Render(&render_context_);
+    }
   }
 
   ++render_context_.frame_counter;
@@ -167,10 +210,15 @@ glm::vec3 Renderer::EyePos() {
 }
 
 glm::vec3 Renderer::LightPos() {
+  // We are using directional lights, so only direction to objects matter, which is norm(LightPos).
+  // We want to move the light with the camera, so we do that calculation first to figure out where
+  // the light should be in world space, then normalize. This makes shadow calculations much easier.
+  // We keep the light at some distance from the origin 
   glm::vec3 eye_to_centre = view_centre_ - render_context_.eye_pos;
-  return glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
-      - eye_to_centre
+  glm::vec3 light_pos = glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
       + EyePos();
+  light_pos += glm::vec3(0.0f, 0.0f, 2.0f * render_context_.eye_pos.z);
+  return glm::normalize(light_pos) * 100.0f;
 }
 
 glm::vec3 Renderer::UnProjectToXY(int32_t x, int32_t y) {

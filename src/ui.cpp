@@ -101,7 +101,7 @@ void UI::Render(RenderContext* context) {
 }
 
 void UI::DrawImage(SDL_Surface* surface, float x, float y, float w, float h) {
-  TextureManager::GetInstance()->BindStreamingTexture(texture_, GL_TEXTURE0);
+  TextureManager::GetInstance()->BindTexture(texture_, GL_TEXTURE0);
 
   // We can try to shove the surface's underlying buffer straight to GPU, but
   // there are 3 potential problems with that:

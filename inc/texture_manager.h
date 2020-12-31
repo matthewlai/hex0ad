@@ -25,9 +25,10 @@ class TextureManager {
   }
 
   void BindTexture(const std::string& texture_name, GLenum texture_unit);
+  void BindTexture(GLuint texture, GLenum texture_unit);
 
   GLuint MakeStreamingTexture(int width, int height);
-  void BindStreamingTexture(GLuint texture, GLenum texture_unit);
+  GLuint MakeDepthTexture(int width, int height);
 
   // Stream data to the currently active texture unit (and bound texture).
   // Data is copied to the sub-image at (0, 0) if width and height are

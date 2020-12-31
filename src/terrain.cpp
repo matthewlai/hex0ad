@@ -207,8 +207,11 @@ void Terrain::Render(RenderContext* context) {
     shader_->SetUniform("use_normal_map"_name, 0);
   }
 
+  shader_->SetUniform("shadow_texture"_name, kShadowTextureUnit);
+
   glm::mat4 mvp = context->projection * context->view;
   shader_->SetUniform("mvp"_name, mvp);
+  shader_->SetUniform("light_transform"_name, context->light_transform);
   shader_->SetUniform("is_edge"_name, 0);
   UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, vertices_vbo_id_);
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);

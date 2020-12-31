@@ -18,7 +18,12 @@ namespace {
 constexpr uint64_t kRenderStatsPeriod = 100000;
 }
 
+constexpr GLint kShadowTextureUnit = 8;
+
 enum class RenderPass {
+  // Shadow map pass. Depth testing enabled, MVP is ortho from light position.
+  kShadow,
+
   // Standard geometry pass with normal MVP, depth testing enabled, alpha blending disabled.
   kGeometry,
 
@@ -32,6 +37,10 @@ class Renderable {
     uint64_t frame_counter;
     glm::mat4 view;
     glm::mat4 projection;
+
+    // Light view + projection for geometry pass.
+    glm::mat4 light_transform;
+
     glm::vec3 light_pos;
     glm::vec3 eye_pos;
 
@@ -124,8 +133,10 @@ class Renderer {
   glm::vec3 view_centre_;
 
   bool first_frame_;
-
   SDL_Window* window_;
+
+  GLuint shadow_map_fb_;
+  GLuint shadow_map_texture_;
 };
 
 template <typename T>

@@ -45,6 +45,11 @@ void TextureManager::BindTexture(const std::string& texture_name, GLenum texture
   }
 }
 
+void TextureManager::BindTexture(GLuint texture, GLenum texture_unit) {
+  glActiveTexture(texture_unit);
+  glBindTexture(GL_TEXTURE_2D, texture);
+}
+
 GLuint TextureManager::MakeStreamingTexture(int width, int height) {
   glActiveTexture(GL_TEXTURE0);
   GLuint texture_id;
@@ -66,9 +71,25 @@ GLuint TextureManager::MakeStreamingTexture(int width, int height) {
   return texture_id;
 }
 
-void TextureManager::BindStreamingTexture(GLuint texture, GLenum texture_unit) {
-  glActiveTexture(texture_unit);
-  glBindTexture(GL_TEXTURE_2D, texture);
+GLuint TextureManager::MakeDepthTexture(int width, int height) {
+  glActiveTexture(GL_TEXTURE0);
+  GLuint texture_id;
+  glGenTextures(1, &texture_id);
+  CHECK_GL_ERROR;
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  CHECK_GL_ERROR;
+  glTexImage2D(GL_TEXTURE_2D, /*level=*/0, /*internalFormat=*/GL_DEPTH_COMPONENT32F, width, height,
+               0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+  CHECK_GL_ERROR;
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  return texture_id;
 }
 
 void TextureManager::StreamData(uint8_t* data, int width, int height) {
