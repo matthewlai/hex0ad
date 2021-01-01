@@ -142,13 +142,18 @@ bool main_loop() {
   if (this_frame_time > last_frame_time) {
     float frame_rate = 1000000.0f / (this_frame_time - last_frame_time);
     filtered_framerate = filtered_framerate * 0.95f + frame_rate * 0.05f;
-    std::stringstream ss;
-    ss << std::fixed << std::setprecision(2);
-    ss << "FPS: " << filtered_framerate;
-    g_state.ui->SetDebugText(0, ss.str());
+    g_state.ui->SetDebugText(0, FormatString("FPS: %", filtered_framerate));
     last_frame_time = this_frame_time;
   }
 
+  int mouse_x;
+  int mouse_y;
+  SDL_GetMouseState(&mouse_x, &mouse_y);
+  glm::vec3 mouse_world_pos = g_state.renderer->UnProjectToXY(mouse_x, mouse_y);
+  Hex hex = g_state.terrain->CoordsToHex(glm::vec2(mouse_world_pos.x, mouse_world_pos.y));
+
+  g_state.ui->SetDebugText(1, FormatString("(x=%, y=%) (r=%, s=%, q=%)", mouse_world_pos.x, mouse_world_pos.y,
+                           hex.r(), hex.s(), hex.q()));
 
   SDL_Event e;
   bool quit = false;

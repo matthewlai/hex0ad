@@ -19,6 +19,10 @@ class Terrain : public Renderable {
     return Hex::SnapToGrid(coords, kGridSize);
   }
 
+  Hex CoordsToHex(const glm::vec2& coords) {
+    return Hex::CartesianToHex(coords, kGridSize);
+  }
+
   virtual ~Terrain() {}
 
  private:
