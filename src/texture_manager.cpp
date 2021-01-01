@@ -154,8 +154,8 @@ void TextureManager::UseTextureSet(ShaderProgram* shader, const TextureSet& text
     shader->SetUniform("use_normal_map"_name, 0);
   }
 
-  if (!textures.norm_texture.empty()) {
-    TextureManager::GetInstance()->BindTexture(textures.norm_texture, GL_TEXTURE3);
+  if (!textures.ao_texture.empty()) {
+    TextureManager::GetInstance()->BindTexture(textures.ao_texture, GL_TEXTURE3);
     shader->SetUniform("ao_texture"_name, 3);
   } else {
     shader->SetUniform("use_ao_map"_name, 0);
