@@ -40,7 +40,7 @@ Tile-based strategy game using 0ad assets
 	* `git clone https://github.com/matthewlai/fcollada.git`
 	* `cd fcollada`
 	* `cmake .`
-	* Build with `make MAKE="make -j 24" && make install` (or as appropriate for how many CPU cores you have)
+	* Build with `make -j 24 && make install` (or as appropriate for how many CPU cores you have)
 
 ## Download and convert 0ad Assets (All Platforms)
 * Download https://0adassets.s3-us-west-2.amazonaws.com/assets.7z, and extract into 0ad_assets, so you should end up with:
