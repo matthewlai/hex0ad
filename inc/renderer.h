@@ -124,6 +124,11 @@ class Renderer {
     GRAPHICS_SETTINGS
   #undef GraphicsSetting
 
+  #define GraphicsSetting(upper, lower, type, default, toggle_key) \
+    type upper() const { return render_context_.lower; }
+    GRAPHICS_SETTINGS
+  #undef GraphicsSetting
+
  private:
   glm::vec3 EyePos();
   glm::vec3 LightPos();
