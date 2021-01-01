@@ -425,10 +425,6 @@ vec4 sampler2DTop(sampler2D t, vec2 p) {
   return textureLod(t, p, 0.0);
 }
 
-vec4 sampler2DOff(sampler2D t, vec2 p, ivec2 o) {
-  return textureLodOffset(t, p, 0.0, o);
-}
-
 float FxaaLuma(vec4 rgba) {
   // Save some time and only do R and G. The B term is very small.
   // The coefficients are 0.2126 (R), 0.7152 (G), 0.0722 (B).
@@ -503,10 +499,10 @@ vec4 FxaaPixelShader(
     posM.x = pos.x;
     posM.y = pos.y;
     float lumaM = FxaaLuma(sampler2DTop(tex, posM));
-    float lumaS = FxaaLuma(sampler2DOff(tex, posM, ivec2( 0, 1)));
-    float lumaE = FxaaLuma(sampler2DOff(tex, posM, ivec2( 1, 0)));
-    float lumaN = FxaaLuma(sampler2DOff(tex, posM, ivec2( 0,-1)));
-    float lumaW = FxaaLuma(sampler2DOff(tex, posM, ivec2(-1, 0)));
+    float lumaS = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2( 0, 1)));
+    float lumaE = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2( 1, 0)));
+    float lumaN = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2( 0, -1)));;
+    float lumaW =  FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2(-1, 0)));;
 /*--------------------------------------------------------------------------*/
     float maxSM = max(lumaS, lumaM);
     float minSM = min(lumaS, lumaM);
@@ -524,10 +520,10 @@ vec4 FxaaPixelShader(
     if (earlyExit)
         return sampler2DTop(tex, posM);
 /*--------------------------------------------------------------------------*/
-    float lumaNW = FxaaLuma(sampler2DOff(tex, posM, ivec2(-1,-1)));
-    float lumaSE = FxaaLuma(sampler2DOff(tex, posM, ivec2( 1, 1)));
-    float lumaNE = FxaaLuma(sampler2DOff(tex, posM, ivec2( 1,-1)));
-    float lumaSW = FxaaLuma(sampler2DOff(tex, posM, ivec2(-1, 1)));
+    float lumaNW = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2(-1, -1)));
+    float lumaSE = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2(1, 1)));
+    float lumaNE = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2(1, -1)));
+    float lumaSW = FxaaLuma(textureLodOffset(tex, posM, 0.0, ivec2(-1, 1)));
 /*--------------------------------------------------------------------------*/
     float lumaNS = lumaN + lumaS;
     float lumaWE = lumaW + lumaE;
