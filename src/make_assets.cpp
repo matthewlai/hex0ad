@@ -568,6 +568,9 @@ void ParseMesh(const std::string& mesh_path) {
     LOG_INFO("Found skinned geometry");
     FCDController* controller = static_cast<FCDController*>(t_instance.instance->GetEntity());
     polys = PolysFromGeometry(controller->GetBaseGeometry());
+  } else {
+    LOG_ERROR("Unknown geometry type: %", t_instance.instance->GetEntity()->GetType());
+    return;
   }
 
   auto num_vertices = polys->GetFaceVertexCount();
@@ -733,7 +736,8 @@ void SaveTextureImpl(const std::string& texture_path) {
   if (old_extension == "png" || old_extension == "dds") {
     // RGBA uncompressed data.
     std::vector<uint8_t> uncompressed;
-    uint32_t width, height;
+    uint32_t width = 0;
+    uint32_t height = 0;
     if (old_extension == "png") {
       // Re-encode and optimize PNG files.
       uint32_t error = lodepng::decode(uncompressed, width, height, file_content);
