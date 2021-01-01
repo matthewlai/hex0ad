@@ -17,36 +17,63 @@ class ShaderProgram {
 
   void Activate() { glUseProgram(program_); }
 
+  // We shouldn't need to check for -1 because glUniform*(-1, ...)
+  // is supposed to be silently ignored (no-op). Unfortunately
+  // Firefox didn't seem to get the memo, and will return an error.
   void SetUniform(const NameLiteral& name, GLint x) {
-    glUniform1i(GetUniformLocation(name), x);
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniform1i(location, x);
+    }
   }
 
   void SetUniform(const NameLiteral& name, GLuint x) {
-    glUniform1ui(GetUniformLocation(name), x);
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniform1ui(location, x);
+    }
   }
 
   void SetUniform(const NameLiteral& name, GLfloat x) {
-    glUniform1f(GetUniformLocation(name), x);
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniform1f(location, x);
+    }
   }
 
   void SetUniform(const NameLiteral& name, const glm::vec2& x) {
-    glUniform2fv(GetUniformLocation(name), 1, glm::value_ptr(x));
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniform2fv(location, 1, glm::value_ptr(x));
+    }
   }
 
   void SetUniform(const NameLiteral& name, const glm::vec3& x) {
-    glUniform3fv(GetUniformLocation(name), 1, glm::value_ptr(x));
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniform3fv(location, 1, glm::value_ptr(x));
+    }
   }
 
   void SetUniform(const NameLiteral& name, const glm::vec4& x) {
-    glUniform4fv(GetUniformLocation(name), 1, glm::value_ptr(x));
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniform4fv(location, 1, glm::value_ptr(x));
+    }
   }
 
   void SetUniform(const NameLiteral& name, const glm::mat3& x) {
-    glUniformMatrix3fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(x));
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniformMatrix3fv(location, 1, GL_FALSE, glm::value_ptr(x));
+    }
   }
 
   void SetUniform(const NameLiteral& name, const glm::mat4& x) {
-    glUniformMatrix4fv(GetUniformLocation(name), 1, GL_FALSE, glm::value_ptr(x));
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(x));
+    }
   }
 
   ~ShaderProgram();
