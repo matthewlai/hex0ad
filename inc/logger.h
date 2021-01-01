@@ -48,6 +48,12 @@
 #pragma warning(disable:26110)
 #endif
 
+template <typename T, typename... Params>
+std::string FormatString(std::string format, T param, Params... remaining_params);
+
+// base case
+std::string FormatString(std::string format);
+
 namespace Logger
 {
 	enum class eLevel
@@ -180,12 +186,6 @@ namespace Logger
 	
 		std::string GenerateMessageWithPrefixSuffix_(eLevel level, std::string message);
 		
-		template <typename T, typename... Params>
-		std::string GenerateMessage_(std::string format, T param, Params... remaining_params);
-		
-		// base case
-		std::string GenerateMessage_(std::string format);
-		
 		bool ShouldLog_(eLevel message_level, eLevel target_level) 
 			{ return target_level != eLevel::DISABLE && target_level <= message_level; }
 		
@@ -229,7 +229,7 @@ namespace Logger
 		
 		bool throttled = m_rateLimiter.Tick();
 		
-		std::string message = GenerateMessage_(format, params...);
+		std::string message = FormatString(format, params...);
 		
 		if (throttled)
 		{
@@ -353,50 +353,6 @@ namespace Logger
 		return ret;
 	}
 	
-	template <typename T, typename... Params>
-	inline std::string Logger::GenerateMessage_(std::string format, T param, Params... remaining_params)
-	{
-		std::string ret;
-	
-		for (size_t i = 0; i < format.size(); ++i)
-		{
-			if (format[i] == '%')
-			{
-				// if we see a %, we throw it away, unless the next character is also %
-				if(i != (format.size() - 1) && format[i+1] == '%')
-				{
-					ret.push_back('%');
-					++i; // skip the next %
-				}
-				else
-				{
-					std::stringstream ss;
-					ss << param;
-					ret.append(ss.str());
-					
-					if (i != (format.size() - 1))
-					{
-						ret.append(GenerateMessage_(format.substr(i + 1), remaining_params...));
-					}
-					
-					break;
-				}
-			}
-			else
-			{				
-				ret.push_back(format[i]);
-			}
-		}
-		
-		return ret;
-	}
-	
-	// base case
-	inline std::string Logger::GenerateMessage_(std::string format)
-	{
-		return format;
-	}
-	
 	inline std::string Logger::LevelToString_(eLevel level)
 	{
 		switch (level)
@@ -415,6 +371,50 @@ namespace Logger
 			return "UNKNOWN_LOG_LEVEL";
 		}
 	}
+}
+
+template <typename T, typename... Params>
+inline std::string FormatString(std::string format, T param, Params... remaining_params)
+{
+	std::string ret;
+
+	for (size_t i = 0; i < format.size(); ++i)
+	{
+		if (format[i] == '%')
+		{
+			// if we see a %, we throw it away, unless the next character is also %
+			if(i != (format.size() - 1) && format[i+1] == '%')
+			{
+				ret.push_back('%');
+				++i; // skip the next %
+			}
+			else
+			{
+				std::stringstream ss;
+				ss << std::fixed << std::setprecision(2) << param;
+				ret.append(ss.str());
+				
+				if (i != (format.size() - 1))
+				{
+					ret.append(FormatString(format.substr(i + 1), remaining_params...));
+				}
+				
+				break;
+			}
+		}
+		else
+		{				
+			ret.push_back(format[i]);
+		}
+	}
+	
+	return ret;
+}
+
+// base case
+inline std::string FormatString(std::string format)
+{
+	return format;
 }
 
 extern Logger::Logger logger;
