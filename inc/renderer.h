@@ -116,6 +116,9 @@ class Renderer {
 
   void DrawQuad();
 
+  // UnProject screen coordinates to a point on the z=0 plane.
+  glm::vec3 UnProjectToXY(int32_t x, int32_t y);
+
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
     void Toggle ## upper() { render_context_.lower ^= 0x1; }
     GRAPHICS_SETTINGS
@@ -124,9 +127,6 @@ class Renderer {
  private:
   glm::vec3 EyePos();
   glm::vec3 LightPos();
-
-  // UnProject screen coordinates to a point on the z=0 plane.
-  glm::vec3 UnProjectToXY(int32_t x, int32_t y);
 
   Renderable::RenderContext render_context_;
   uint64_t last_stat_time_us_;
