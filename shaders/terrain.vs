@@ -14,6 +14,8 @@ void main() {
 
   set_tex_coords(texture_scale * vec2(v_position.x, v_position.y));
 
+  set_ao_tex_coords(vec2(0.0f, 0.0f));
+
   // Normal is always up for now because we have flat terrain.
   set_normal(vec3(0.0f, 0.0f, 1.0f));
 

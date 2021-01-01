@@ -134,7 +134,6 @@ class Renderer {
   glm::vec3 LightPos();
 
   Renderable::RenderContext render_context_;
-  uint64_t last_stat_time_us_;
 
   float eye_azimuth_;
   float eye_elevation_;

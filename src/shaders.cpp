@@ -59,7 +59,7 @@ ShaderCompileResult CompileShader(GLenum shader_type,
 
   #ifdef USE_OPENGL
   // GLSL ES 3.0 is based on GLSL 3.3.
-  replacements["#version 300 es"] = "#version 300";
+  replacements["#version 300 es"] = "#version 330";
   #endif
 
   const char* kIncludePattern = R"""(#include\s"(.+)")""";

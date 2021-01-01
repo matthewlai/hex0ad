@@ -80,7 +80,7 @@ ifeq ($(EM_BUILD), 1)
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
 	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g
-	LDFLAGS = -lm -lFColladaSD
+	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
 		LDFLAGS = -lmingw32 -lSDL2main -lSDL2 -lSDL2_ttf -lFColladaSD
@@ -99,14 +99,24 @@ else
 		CXXFLAGS_DEP = -std=gnu++17 $(shell sdl2-config --cflags)
 		LDFLAGS = $(shell sdl2-config --libs)
 
+		# SDL2_ttf dependencies.
+		CXXFLAGS += $(shell pkg-config --cflags SDL2_ttf)
+		LDFLAGS += $(shell pkg-config --libs SDL2_ttf)
+
+		# FCollada dependencies.
+		CXXFLAGS += $(shell pkg-config --cflags fcollada)
+		LDFLAGS += $(shell pkg-config --libs fcollada)
+
+		# libxml2 dependencies.
+		CXXFLAGS += $(shell pkg-config --cflags libxml-2.0)
+		LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+
 		# OpenGL dependencies.
 		ifeq ($(UNAME_S),Darwin)
 			LDFLAGS += -framework OpenGL
 		else
 			LDFLAGS += -lGL
 		endif
-
-		LDFLAGS += -lFColladaSD
 	endif
 endif
 
