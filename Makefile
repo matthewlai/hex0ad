@@ -69,6 +69,8 @@ INCLUDES +=-Iinc -Ithird_party -Ifb -Ithird_party/libimagequant
 # Platforms.
 DEFAULT_TARGETS = $(BINS)
 
+CXXFLAGS_DEP = -std=gnu++17
+
 # Flags.
 ifeq ($(EM_BUILD), 1)
 	PORTS =  -s USE_SDL=2 -s USE_SDL_TTF=2
@@ -95,20 +97,19 @@ else
 		endif
 
 		# SDL dependencies.
-		CXXFLAGS += $(shell sdl2-config --cflags)
-		CXXFLAGS_DEP = -std=gnu++17 $(shell sdl2-config --cflags)
+		INCLUDES += $(shell sdl2-config --cflags)
 		LDFLAGS = $(shell sdl2-config --libs)
 
 		# SDL2_ttf dependencies.
-		CXXFLAGS += $(shell pkg-config --cflags SDL2_ttf)
+		INCLUDES += $(shell pkg-config --cflags SDL2_ttf)
 		LDFLAGS += $(shell pkg-config --libs SDL2_ttf)
 
 		# FCollada dependencies.
-		CXXFLAGS += $(shell pkg-config --cflags fcollada)
+		INCLUDES += $(shell pkg-config --cflags fcollada)
 		LDFLAGS += $(shell pkg-config --libs fcollada)
 
 		# libxml2 dependencies.
-		CXXFLAGS += $(shell pkg-config --cflags libxml-2.0)
+		INCLUDES += $(shell pkg-config --cflags libxml-2.0)
 		LDFLAGS += $(shell pkg-config --libs libxml-2.0)
 
 		# OpenGL dependencies.
