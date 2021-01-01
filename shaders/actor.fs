@@ -17,6 +17,6 @@ out vec4 frag_colour;
 #include "light.finc"
 
 void main() {
-  frag_colour = compute_lighting(use_player_colour, /*ao_strength=*/0.0f, kAmbientLight, kDirectionalLightIntensity, kShininess);
+  frag_colour = compute_lighting(use_player_colour, /*ao_strength=*/kAoStrength, kAmbientLight, kDirectionalLightIntensity, kShininess);
 }
 
