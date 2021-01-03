@@ -2,9 +2,11 @@
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <memory>
 #include <set>
 #include <stack>
 #include <sstream>
@@ -108,6 +110,77 @@ class DoneTracker {
  private:
   std::mutex mutex_;
   std::set<std::string> done_set_;
+};
+
+class ThreadPool {
+ public:
+  ThreadPool(int num_threads) : num_threads_(num_threads), done_(false) {}
+  ThreadPool(const ThreadPool&) = delete;
+  ThreadPool& operator=(const ThreadPool&) = delete;
+
+  // Tell the workers to exit as soon as the work_queue_ is empty.
+  void SetDone() { done_ = true; cv_.notify_all(); }
+
+  void Push(std::function<void()> work) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    work_queue_.push(work);
+    cv_.notify_one();
+  }
+
+  void Run() {
+    auto worker_fn = [&]() {
+      while (true) {
+        std::function<void()> work;
+        bool all_done = false;
+
+        {
+          std::unique_lock<std::mutex> lock(mutex_);
+          cv_.wait(lock, [&]{ return done_ || !work_queue_.empty(); });
+
+          if (!work_queue_.empty()) {
+            work = work_queue_.front();
+            work_queue_.pop();
+            if (work_queue_.empty() && done_) {
+              // We took the last task, so we should notify everyone to wakeup and die (once we release the mutex).
+              all_done = true;
+            }
+          } else if (done_) {
+            break;
+          }
+        }
+        if (all_done) {
+          cv_.notify_all();
+        }
+        if (work) {
+          work();
+        }
+      }
+    };
+
+    for (int i = 0; i < num_threads_; ++i) {
+      threads_.push_back(std::thread(worker_fn));
+    }
+  }
+
+  void JoinAll() {
+    for (std::thread& t : threads_) {
+      t.join();
+    }
+    threads_.clear();
+  }
+
+  ~ThreadPool() {
+    SetDone();
+    JoinAll();
+  }
+
+ private:
+  int num_threads_;
+  bool done_;
+  std::vector<std::thread> threads_;
+  std::queue<std::function<void()>> work_queue_;
+  std::condition_variable cv_;
+  std::mutex mutex_;
 };
 
 std::vector<XMLHandle> GetAllChildrenElements(XMLHandle root, const std::string& elem) {
@@ -564,10 +637,10 @@ void ParseMesh(const std::string& mesh_path) {
   FCDGeometryPolygons* polys;
 
   if (t_instance.instance->GetEntity()->GetType() == FCDEntity::GEOMETRY) {
-    LOG_INFO("Found static geometry");
+    LOG_DEBUG("Found static geometry");
     polys = PolysFromGeometry(static_cast<FCDGeometry*>(t_instance.instance->GetEntity()));
   } else if (t_instance.instance->GetEntity()->GetType() == FCDEntity::CONTROLLER) {
-    LOG_INFO("Found skinned geometry");
+    LOG_DEBUG("Found skinned geometry");
     FCDController* controller = static_cast<FCDController*>(t_instance.instance->GetEntity());
     polys = PolysFromGeometry(controller->GetBaseGeometry());
   } else {
@@ -577,7 +650,7 @@ void ParseMesh(const std::string& mesh_path) {
 
   auto num_vertices = polys->GetFaceVertexCount();
 
-  LOG_INFO("% vertices", num_vertices);
+  LOG_DEBUG("% vertices", num_vertices);
 
   auto positions_data = GetData(polys->FindInput(FUDaeGeometryInput::POSITION));
   auto normals_data = GetData(polys->FindInput(FUDaeGeometryInput::NORMAL));
@@ -616,7 +689,7 @@ void ParseMesh(const std::string& mesh_path) {
     return;
   }
 
-  LOG_INFO("% texture coordinate sets", texcoords_data.size());
+  LOG_DEBUG("% texture coordinate sets", texcoords_data.size());
 
   std::vector<VertexData> vertex_datas(num_vertices);
 
@@ -634,7 +707,7 @@ void ParseMesh(const std::string& mesh_path) {
 
   IndexedVertexData ivd = Reindex(std::move(vertex_datas));
 
-  LOG_INFO("% deduplicated vertex data", ivd.vds.size());
+  LOG_DEBUG("% deduplicated vertex data", ivd.vds.size());
 
   std::vector<float> vertices(ivd.vds.size() * 3);
   for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
@@ -722,25 +795,13 @@ void ParseMesh(const std::string& mesh_path) {
               builder.GetBufferPointer(), builder.GetSize());
 }
 
-// Texture saving is slow. We save them in other threads in parallel.
-std::mutex g_textures_to_save_mutex;
-std::condition_variable g_textures_to_save_notify;
-std::set<std::string> g_textures_to_save;
+std::unique_ptr<ThreadPool> g_texture_pool;
 
-// This flag tells worker threads to exit.
-bool g_textures_to_save_all_queued = false;
-
-void EnqueueTexture(const std::string& texture_path) {
-  {
-    std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
-    g_textures_to_save.insert(texture_path);
-
+void SaveTexture(const std::string& texture_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(texture_path)) {
+    return;
   }
-  g_textures_to_save_notify.notify_one();
-  LOG_INFO("Enqueued texture %", texture_path);
-}
-
-void SaveTextureImpl(const std::string& texture_path) {
   std::string full_path = std::string(kInputPrefix) + kTexturePathPrefix + texture_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   std::ifstream is(full_path);
@@ -789,6 +850,13 @@ void SaveTextureImpl(const std::string& texture_path) {
     return;
   }
 }
+
+void EnqueueTexture(const std::string& texture_path) {
+  g_texture_pool->Push([texture_path]() { SaveTexture(texture_path); });
+  LOG_INFO("Enqueued texture %", texture_path);
+}
+
+std::unique_ptr<ThreadPool> g_parser_pool;
 
 void MakeActor(const std::string& actor_path) {
   static DoneTracker done_tracker;
@@ -986,59 +1054,33 @@ int main(int /*argc*/, char** /*argv*/) {
   unsigned threads_to_use = std::thread::hardware_concurrency();
   if (threads_to_use <= 1) {
     threads_to_use = 1;
-  } else {
-    threads_to_use -= 1;
   }
 
-  auto worker_fn = [&]() {
-    while (true) {
-      std::string path;
-      bool all_done = false;
+  LOG_INFO("Using % threads per thread pool", threads_to_use);
 
-      {
-        std::unique_lock<std::mutex> lock(g_textures_to_save_mutex);
-        g_textures_to_save_notify.wait(lock, []{ return g_textures_to_save_all_queued || !g_textures_to_save.empty(); });
+  g_texture_pool = std::make_unique<ThreadPool>(threads_to_use);
+  g_texture_pool->Run();
 
-        if (!g_textures_to_save.empty()) {
-          path = *g_textures_to_save.begin();
-          g_textures_to_save.erase(g_textures_to_save.begin());
-          if (g_textures_to_save.empty() && g_textures_to_save_all_queued) {
-            // We took the last texture, so we should notify everyone to wakeup and die (once we release the mutex).
-            all_done = true;
-          }
-        } else if (g_textures_to_save_all_queued) {
-          break;
-        }
-      }
-      if (all_done) {
-        g_textures_to_save_notify.notify_all();
-      }
-      if (!path.empty()) {
-        SaveTextureImpl(path);
-      }
-    }
-  };
-
-  std::vector<std::thread> texture_workers;
-  for (unsigned int i = 0; i < threads_to_use; ++i) {
-    texture_workers.push_back(std::thread(worker_fn));
-  }
+  g_parser_pool = std::make_unique<ThreadPool>(threads_to_use);
+  g_parser_pool->Run();
 
   for (const auto& path : kTestTerrainPaths) {
-    MakeTerrain(path);
+    g_parser_pool->Push([path]() { MakeTerrain(path); });
   }
 
-  
+  std::vector<std::thread> actor_workers;
   for (const auto& path : kTestActorPaths) {
-    MakeActor(path);
+    // We only parallelize in the unit of root actors (not props) so
+    // we know when all pushes have happened and we can tell the
+    // threadpool to exit.
+    g_parser_pool->Push([path]() { MakeActor(path); });
   }
 
-  g_textures_to_save_all_queued = true;
-  g_textures_to_save_notify.notify_all();
+  // We have to wait for the parser pool to finish first so we know we won't be adding
+  // more textures.
+  g_parser_pool.reset();
 
-  for (auto& t : texture_workers) {
-    t.join();
-  }
+  g_texture_pool.reset();
 
   FCollada::Release();
   LOG_INFO("Took % seconds", (GetTimeUs() - start_time) / 1000000.0f);
