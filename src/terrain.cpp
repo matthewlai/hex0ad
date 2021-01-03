@@ -2,6 +2,7 @@
 
 #include "logger.h"
 #include "renderer.h"
+#include "resources.h"
 #include "shaders.h"
 #include "texture_manager.h"
 #include "utils.h"
@@ -17,23 +18,12 @@ constexpr static int kMapSize = 15;
 
 static constexpr const char* kTerrainPathPrefix = "assets/art/terrains/";
 
-static constexpr const char* kTerrainPaths[] = {
-    "biome-alpine/alpine_snow_a.fb",
-    "biome-desert/desert_city_tile.fb",
-    "biome-desert/desert_grass_a.fb",
-    "biome-desert/desert_farmland.fb",
-    "biome-polar/polar_ice.fb",
-    "biome-polar/polar_snow_a.fb",
-    "biome-savanna/savanna_tile_a.fb",
-    "biome-mediterranean/medit_sand_messy.fb",
-};
-
 TextureSet* TerrainTextureSet(const std::string& path) {
   static std::map<std::string, TextureSet> cache;
   auto it = cache.find(path);
   if (it == cache.end()) {
     std::vector<std::uint8_t> raw_buffer =
-        ReadWholeFile(std::string(kTerrainPathPrefix) + path);
+        ReadWholeFile(std::string(kTerrainPathPrefix) + path + ".fb");
     const data::Terrain* terrain_data = data::GetTerrain(raw_buffer.data());
 
     TextureSet textures = TextureManager::GetInstance()->LoadTextures(*terrain_data->textures());
@@ -155,9 +145,9 @@ void Terrain::Render(RenderContext* context) {
     // https://trac.wildfiregames.com/wiki/ArtDesignDocument#TerrainTextures
     shader_->SetUniform("texture_scale"_name, (1.0f / 22.0f));
 
-    std::size_t num_terrains = sizeof(kTerrainPaths) / sizeof(kTerrainPaths[0]);
+    std::size_t num_terrains = sizeof(kTestTerrainPaths) / sizeof(kTestTerrainPaths[0]);
     terrain_selection_ = Rand(0, num_terrains);
-    LOG_INFO("Selected terrain % (%/%)", kTerrainPaths[terrain_selection_], terrain_selection_, num_terrains);
+    LOG_INFO("Selected terrain % (%/%)", kTestTerrainPaths[terrain_selection_], terrain_selection_, num_terrains);
 
     initialized_ = true;
   }
@@ -172,7 +162,7 @@ void Terrain::Render(RenderContext* context) {
   GRAPHICS_SETTINGS
   #undef GraphicsSetting
 
-  TextureSet* textures = TerrainTextureSet(kTerrainPaths[terrain_selection_]);
+  TextureSet* textures = TerrainTextureSet(kTestTerrainPaths[terrain_selection_]);
 
   TextureManager::GetInstance()->UseTextureSet(shader_, *textures);
 

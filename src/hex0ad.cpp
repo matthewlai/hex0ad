@@ -14,6 +14,7 @@
 #include "actor.h"
 #include "logger.h"
 #include "renderer.h"
+#include "resources.h"
 #include "terrain.h"
 #include "ui.h"
 #include "utils.h"
@@ -276,23 +277,16 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.ui = std::make_unique<UI>();
 
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/mauryas/fortress.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/stable.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/fortress.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/persians/fortress.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/romans/fortress.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/spartans/fortress.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("structures/britons/civic_centre.fb").MakeActor());
-  g_state.actors.push_back(ActorTemplate::GetTemplate("units/athenians/hero_infantry_javelinist_iphicrates.fb").MakeActor());
-  g_state.actors.rbegin()->SetScale(5.0f);
-  g_state.actors.push_back(ActorTemplate::GetTemplate("units/romans/hero_cavalry_swordsman_maximus_r.fb").MakeActor());
-  g_state.actors.rbegin()->SetScale(5.0f);
-  g_state.actors.push_back(ActorTemplate::GetTemplate("units/romans/cavalry_javelinist_a_m.fb").MakeActor());
-  g_state.actors.rbegin()->SetScale(5.0f);
+  for (const auto& path : kTestActorPaths) {
+    g_state.actors.push_back(ActorTemplate::GetTemplate(std::string(path) + ".fb").MakeActor());
+    if (std::string(path).find("units") != std::string::npos) {
+      g_state.actors.rbegin()->SetScale(3.0f);
+    }
+  }
 
   for (std::size_t i = 0; i < g_state.actors.size(); ++i) {
     float arg = 2.0f * M_PI / g_state.actors.size() * i;
-    float dist = 35.0f;
+    float dist = (g_state.actors.size() - 1) * 4.0f;
     glm::vec2 position(dist * cos(arg), dist * sin(arg));
     position = g_state.terrain->SnapToGrid(position);
     g_state.actors[i].SetPosition(glm::vec3(position.x, position.y, 0.0f));

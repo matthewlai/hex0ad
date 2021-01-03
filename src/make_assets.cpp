@@ -19,6 +19,7 @@
 
 #include "actor_generated.h"
 #include "mesh_generated.h"
+#include "resources.h"
 #include "terrain_generated.h"
 #include "texture_generated.h"
 
@@ -57,43 +58,7 @@ using tinyxml2::XMLNode;
 using tinyxml2::XMLText;
 
 namespace {
-static constexpr const char* kTestActorPaths[] = {
-    "structures/britons/civic_centre.xml",
-
-    "structures/mauryas/fortress.xml",
-    "structures/britons/fortress.xml",
-    "structures/persians/fortress.xml",
-    "structures/romans/fortress.xml",
-    "structures/spartans/fortress.xml",
-
-    "structures/persians/stable.xml",
-    "units/athenians/hero_infantry_javelinist_iphicrates.xml",
-    "units/romans/hero_cavalry_swordsman_maximus_r.xml",
-    "units/romans/cavalry_javelinist_a_m.xml",
-    };
-
-static constexpr const char* kTestTerrainPaths[] = {
-    "biome-alpine/alpine_snow_a.xml",
-    "biome-desert/desert_city_tile.xml",
-    "biome-desert/desert_grass_a.xml",
-    "biome-desert/desert_farmland.xml",
-    "biome-polar/polar_ice.xml",
-    "biome-polar/polar_snow_a.xml",
-    "biome-savanna/savanna_tile_a.xml",
-    "biome-mediterranean/medit_sand_messy.xml",
-    };
-
 constexpr int kFlatBuilderInitSize = 4 * 1024 * 1024;
-
-static constexpr const char* kInputPrefix = "0ad_assets/";
-static constexpr const char* kOutputPrefix = "assets/";
-static constexpr const char* kActorPathPrefix = "art/actors/";
-static constexpr const char* kMeshPathPrefix = "art/meshes/";
-static constexpr const char* kTexturePathPrefix = "art/textures/";
-static constexpr const char* kActorTexturePathPrefix = "skins/";
-static constexpr const char* kVariantPathPrefix = "art/variants/";
-static constexpr const char* kTerrainPathPrefix = "art/terrains/";
-static constexpr const char* kTerrainTexturePathPrefix = "terrain/";
 
 class DoneTracker {
  public:
@@ -863,7 +828,7 @@ void MakeActor(const std::string& actor_path) {
   if (done_tracker.ShouldSkip(actor_path)) {
     return;
   }
-  std::string full_path = std::string(kInputPrefix) + kActorPathPrefix + actor_path;
+  std::string full_path = std::string(kInputPrefix) + kActorPathPrefix + RemoveExtension(actor_path) + ".xml";
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing actor % at %", actor_path, full_path);
   TinyXMLDocument xml_doc;
@@ -1009,7 +974,7 @@ void MakeTerrain(const std::string& terrain_path) {
   if (done_tracker.ShouldSkip(terrain_path)) {
     return;
   }
-  std::string full_path = std::string(kInputPrefix) + kTerrainPathPrefix + terrain_path;
+  std::string full_path = std::string(kInputPrefix) + kTerrainPathPrefix + terrain_path + ".xml";
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing terrain % at %", terrain_path, full_path);
   TinyXMLDocument xml_doc;
