@@ -51,6 +51,7 @@ using TinyXMLDocument = tinyxml2::XMLDocument;
 using tinyxml2::XMLElement;
 using tinyxml2::XMLHandle;
 using tinyxml2::XMLNode;
+using tinyxml2::XMLText;
 
 namespace {
 static constexpr const char* kTestActorPaths[] = {
@@ -795,6 +796,20 @@ void MakeActor(const std::string& actor_path) {
     throw std::runtime_error(full_path + " has no groups?");
   }
 
+  std::string material;
+
+  std::vector<XMLHandle> materials = GetAllChildrenElements(root, "material");
+  if (!materials.empty()) {
+    for (const XMLNode* child = materials[0].FirstChild().ToNode(); child != nullptr; child = child->NextSibling()) {
+      const XMLText* text = child->ToText();
+      if (text) {
+        LOG_DEBUG("Material is: %", text->Value());
+        material = text->Value();
+        break;
+      }
+    }
+  }
+
   LOG_DEBUG("% groups found", xml_groups.size());
 
   std::vector<flatbuffers::Offset<data::Group>> groups;
@@ -904,7 +919,8 @@ void MakeActor(const std::string& actor_path) {
   auto actor = data::CreateActor(
       builder,
       /*path=*/builder.CreateString(RemoveExtension(actor_path)),
-      /*groups=*/builder.CreateVector(groups));
+      /*groups=*/builder.CreateVector(groups),
+      /*material=*/builder.CreateString(material));
   builder.Finish(actor);
   WriteToFile(std::string(kOutputPrefix) + kActorPathPrefix + RemoveExtension(actor_path) + ".fb",
               builder.GetBufferPointer(), builder.GetSize());

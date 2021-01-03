@@ -28,6 +28,7 @@ table Group {
 table Actor {
 	path:string;
 	groups:[Group];
+  material:string;
 }
 
 root_type Actor;

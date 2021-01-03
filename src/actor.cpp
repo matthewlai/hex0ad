@@ -62,7 +62,7 @@ std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_na
 }
 
 void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, const glm::mat4& vp,
-                const glm::mat4& model, Renderable::RenderContext* context) {
+                const glm::mat4& model, bool use_player_colour, Renderable::RenderContext* context) {
   static std::map<std::string, MeshGPUData> mesh_gpu_data_cache;
   bool shadow_pass = context->pass == RenderPass::kShadow;
   auto it = mesh_gpu_data_cache.find(mesh_file_name);
@@ -125,6 +125,10 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     if (textures.base_texture.empty()) {
       LOG_ERROR("No base texture. Skipping mesh.");
       return;
+    }
+
+    if (!use_player_colour) {
+      shader->SetUniform("use_player_colour", 0);
     }
 
     TextureManager::GetInstance()->BindTexture(textures.base_texture, GL_TEXTURE0);
@@ -233,8 +237,19 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
 
   attachpoints["root"] = glm::mat4(1.0f);
 
+  auto* material_field = actor_data_->material();
+
+  bool use_player_colour = true;
+
+  if (!material_field) {
+    LOG_ERROR("% has no material", actor_data_->path()->str());
+  } else {
+    std::string material = actor_data_->material()->str();
+    use_player_colour = material.find("player") != std::string::npos;
+  }
+
   RenderMesh(mesh_path, textures, context->projection * context->view,
-             model * attachpoints["main_mesh"], context);
+             model * attachpoints["main_mesh"], use_player_colour, context);
 
   for (auto& [point, actor_templates] : props) {
     for (auto& actor_template : actor_templates) {
