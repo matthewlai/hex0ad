@@ -125,6 +125,11 @@ class Renderer {
   #undef GraphicsSetting
 
   #define GraphicsSetting(upper, lower, type, default, toggle_key) \
+    void Set ## upper(type new_val) { render_context_.lower = new_val; }
+    GRAPHICS_SETTINGS
+  #undef GraphicsSetting
+
+  #define GraphicsSetting(upper, lower, type, default, toggle_key) \
     type upper() const { return render_context_.lower; }
     GRAPHICS_SETTINGS
   #undef GraphicsSetting
