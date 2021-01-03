@@ -26,7 +26,7 @@ uniform vec3 player_colour;
 // We scale depth bias by distance so zooming won't affect peter-paning.
 // Increasing this decreases shadow artifact when light hits almost parallel to a surface,
 // but increases peter-paning.
-const float kDepthBias = 0.004f;
+const float kDepthBias = 0.002f;
 
 // N=3 kernel
 /*
