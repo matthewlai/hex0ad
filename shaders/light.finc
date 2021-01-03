@@ -28,6 +28,14 @@ uniform vec3 player_colour;
 // but increases peter-paning.
 const float kDepthBias = 0.002f;
 
+// N=1 no filtering
+/*
+const int kDepthMapFilterSize = 1;
+const float kDepthMapFilterMultiplier = 1.0f;
+const float[] kDepthMapFilter = float[](1.0f);
+const ivec2[] kDepthMapFilterOffsets = ivec2[](ivec2(0, 0));
+*/
+
 // N=3 kernel
 /*
 const int kDepthMapFilterSize = 9;
@@ -77,6 +85,8 @@ float shadow() {
 
   float depth_bias = kDepthBias / light_distance_100 * depth_bias_multiplier;
   float shadow = 0.0f;
+
+  // TODO: implement early exit.
 
   // We have to unroll this for ANGLE.
   float depths[kDepthMapFilterSize] = float[](
