@@ -1,4 +1,5 @@
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -723,8 +724,21 @@ void ParseMesh(const std::string& mesh_path) {
 
 // Texture saving is slow. We save them in other threads in parallel.
 std::mutex g_textures_to_save_mutex;
+std::condition_variable g_textures_to_save_notify;
 std::set<std::string> g_textures_to_save;
+
+// This flag tells worker threads to exit.
 bool g_textures_to_save_all_queued = false;
+
+void EnqueueTexture(const std::string& texture_path) {
+  {
+    std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
+    g_textures_to_save.insert(texture_path);
+
+  }
+  g_textures_to_save_notify.notify_one();
+  LOG_INFO("Enqueued texture %", texture_path);
+}
 
 void SaveTextureImpl(const std::string& texture_path) {
   std::string full_path = std::string(kInputPrefix) + kTexturePathPrefix + texture_path;
@@ -858,11 +872,7 @@ void MakeActor(const std::string& actor_path) {
         for (auto& texture : textures) {
           std::string texture_name = texture.ToElement()->Attribute("name");
           std::string texture_file = texture.ToElement()->Attribute("file");
-          {
-            std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
-            g_textures_to_save.insert(kActorTexturePathPrefix + texture_file);
-          }
-          LOG_INFO("Enqueued texture %", texture_file);
+          EnqueueTexture(kActorTexturePathPrefix + texture_file);
           texture_offsets.push_back(data::CreateTexture(
               builder,
               /*name=*/builder.CreateString(texture_name),
@@ -950,11 +960,7 @@ void MakeTerrain(const std::string& terrain_path) {
     for (auto& texture : textures) {
       std::string texture_name = texture.ToElement()->Attribute("name");
       std::string texture_file = texture.ToElement()->Attribute("file");
-      {
-        std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
-        g_textures_to_save.insert(kTerrainTexturePathPrefix + texture_file);
-      }
-      LOG_INFO("Enqueued texture %", texture_file);
+      EnqueueTexture(kTerrainTexturePathPrefix + texture_file);
       texture_offsets.push_back(data::CreateTexture(
           builder,
           /*name=*/builder.CreateString(texture_name),
@@ -987,16 +993,25 @@ int main(int /*argc*/, char** /*argv*/) {
   auto worker_fn = [&]() {
     while (true) {
       std::string path;
+      bool all_done = false;
+
       {
-        std::lock_guard<std::mutex> lock(g_textures_to_save_mutex);
+        std::unique_lock<std::mutex> lock(g_textures_to_save_mutex);
+        g_textures_to_save_notify.wait(lock, []{ return g_textures_to_save_all_queued || !g_textures_to_save.empty(); });
+
         if (!g_textures_to_save.empty()) {
           path = *g_textures_to_save.begin();
           g_textures_to_save.erase(g_textures_to_save.begin());
-        } else {
-          if (g_textures_to_save_all_queued) {
-            break;
+          if (g_textures_to_save.empty() && g_textures_to_save_all_queued) {
+            // We took the last texture, so we should notify everyone to wakeup and die (once we release the mutex).
+            all_done = true;
           }
+        } else if (g_textures_to_save_all_queued) {
+          break;
         }
+      }
+      if (all_done) {
+        g_textures_to_save_notify.notify_all();
       }
       if (!path.empty()) {
         SaveTextureImpl(path);
@@ -1013,10 +1028,13 @@ int main(int /*argc*/, char** /*argv*/) {
     MakeTerrain(path);
   }
 
+  
   for (const auto& path : kTestActorPaths) {
     MakeActor(path);
   }
+
   g_textures_to_save_all_queued = true;
+  g_textures_to_save_notify.notify_all();
 
   for (auto& t : texture_workers) {
     t.join();
