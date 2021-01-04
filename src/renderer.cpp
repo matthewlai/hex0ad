@@ -23,7 +23,7 @@ constexpr static float kDefaultEyeAzimuth = 0.0f;
 constexpr static float kDefaultEyeElevation = 45.0f;
 constexpr static float kZoomSpeed = 0.1f;
 
-constexpr static int kShadowMapSize = 2048;
+constexpr static int kShadowMapSize = 4096;
 
 constexpr bool kDebugRenderDepth = false;
 }
@@ -293,6 +293,10 @@ glm::vec3 Renderer::LightPos() {
   glm::vec3 light_pos = glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
       + EyePos();
   light_pos += glm::vec3(0.0f, 0.0f, 1.3f * render_context_.eye_pos.z);
+
+  // Apply a minimum distance.
+  float distance = std::max(10.0f, glm::length(view_centre_ - light_pos));
+  light_pos = glm::normalize(light_pos - view_centre_) * distance + view_centre_;
   return light_pos;
 }
 
