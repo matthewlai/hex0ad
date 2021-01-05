@@ -139,13 +139,6 @@ SDL_GLContext InitSDL() {
 bool main_loop() {
   static uint64_t last_frame_time = GetTimeUs() - 16666;
   static float filtered_framerate = 0.0f;
-  uint64_t this_frame_time = GetTimeUs();
-  if (this_frame_time > last_frame_time) {
-    float frame_rate = 1000000.0f / (this_frame_time - last_frame_time);
-    filtered_framerate = filtered_framerate * 0.95f + frame_rate * 0.05f;
-    g_state.ui->SetDebugText(0, FormatString("FPS: %", filtered_framerate));
-    last_frame_time = this_frame_time;
-  }
 
   int mouse_x;
   int mouse_y;
@@ -226,6 +219,19 @@ bool main_loop() {
   renderables.push_back(g_state.ui.get());
 
   g_state.renderer->RenderFrame(renderables);
+
+  uint64_t this_frame_time = GetTimeUs();
+  if (this_frame_time > last_frame_time) {
+    float frame_rate = 1000000.0f / (this_frame_time - last_frame_time);
+    // Use the frame rate as a min-tracking filter.
+    if (frame_rate < filtered_framerate) {
+      filtered_framerate = frame_rate;
+    } else {
+      filtered_framerate = filtered_framerate * 0.95f + frame_rate * 0.05f;
+    }
+    g_state.ui->SetDebugText(0, FormatString("FPS: %", filtered_framerate));
+    last_frame_time = this_frame_time;
+  }
 
   return quit;
 }
