@@ -94,31 +94,31 @@ float shadow() {
 
   // We have to unroll this for ANGLE.
   float depths[kDepthMapFilterSize] = float[](
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[0]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[1]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[2]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[3]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[4]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[5]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[6]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[7]).r,
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[8]).r
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[9]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[10]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[11]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[12]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[13]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[14]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[15]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[16]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[17]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[18]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[19]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[20]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[21]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[22]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[23]).r,
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[24]).r
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[0]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[1]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[2]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[3]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[4]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[5]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[6]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[7]),
+    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[8])
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[9]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[10]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[11]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[12]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[13]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[14]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[15]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[16]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[17]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[18]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[19]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[20]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[21]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[22]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[23]),
+    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[24])
   );
 
   for (int i = 0; i < kDepthMapFilterSize; ++i) {
