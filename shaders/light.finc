@@ -9,6 +9,9 @@ in vec3 norm_world_to_eye;
 in float light_distance_100;
 in float depth_bias_multiplier;
 
+precision lowp sampler2D;
+precision lowp sampler2DShadow;
+
 uniform sampler2D base_texture;
 uniform sampler2D norm_texture;
 uniform sampler2D spec_texture;
