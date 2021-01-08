@@ -26,13 +26,17 @@
 #define GL_GLEXT_PROTOTYPES
 #include <SDL_opengl.h>
 #include <SDL_opengl_glext.h>
+#elif defined(__LINUX__)
+#ifndef APIENTRY
+#define APIENTRY GL_APIENTRY
+#endif
+#include <GLES3/gl3.h>
 #elif !defined(_WIN32)
 #include <SDL_opengles2.h>
 #endif
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
-
 #include <GLES3/gl31.h>
 #endif
 

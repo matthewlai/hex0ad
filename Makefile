@@ -39,13 +39,12 @@ CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 CXXFILES += third_party/lodepng/lodepng.cpp
 
 # We don't actually support C, so treat libimagequant differently.
-# CFLAGS are copied from the official Makefile. We can use SSE here because this will not be built for the game
-# itself.
+# CFLAGS are copied from the official Makefile.
 IMAGEQUANT_CC = gcc
 IMAGEQUANT_CFILES := $(wildcard third_party/libimagequant/*.c)
 IMAGEQUANT_OBJS := $(IMAGEQUANT_CFILES:%.c=obj/%.o)
 IMAGEQUANT_CFLAGS = -fno-math-errno -funroll-loops -fomit-frame-pointer -Wall -std=c99 -Wno-attributes
-IMAGEQUANT_CFLAGS += -O3 -DNDEBUG -DUSE_SSE=1 -msse -mfpmath=sse -Wno-unknown-pragmas -fexcess-precision=fast
+IMAGEQUANT_CFLAGS += -O3 -DNDEBUG -Wno-unknown-pragmas -fexcess-precision=fast
 IMAGEQUANT_CFLAGS += -Ithird_party/libimagequant
 
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
@@ -81,7 +80,7 @@ ifeq ($(EM_BUILD), 1)
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -Wno-psabi -g -O3
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
@@ -117,6 +116,10 @@ else
 			LDFLAGS += -framework OpenGL
 		else
 			LDFLAGS += -lGL
+		endif
+
+		ifeq ($(UNAME_S),Linux)
+			LDFLAGS += -ldl -pthread
 		endif
 	endif
 endif
