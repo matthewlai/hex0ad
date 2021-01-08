@@ -3,6 +3,22 @@ Tile-based strategy game using 0ad assets
 
 # BUILD
 ## Requirements
+
+### Linux (Debian-based, including Raspberry Pi 4)
+* SDL2 SDL ttf, GLEW, CMake
+	* `sudo apt install libsdl2-dev libsdl2-ttf-dev libglew-dev cmake`
+* Flatc compiler (https://github.com/google/flatbuffers/releases)
+	* `git clone https://github.com/google/flatbuffers.git`
+	* `cd flatbuffers`
+	* `cmake . -DFLATBUFFERS_BUILD_TESTS=OFF -DFLATBUFFERS_PACKAGE_DEBIAN=ON`
+	* `make -j6 package`
+	* `sudo dpkg -i flatbuffers_*.deb`
+* FCollada for converting assets (https://github.com/matthewlai/fcollada)
+	* `git clone https://github.com/matthewlai/fcollada.git`
+	* `cd fcollada`
+	* `cmake . -DCMAKE_INSTALL_PREFIX=/usr`
+	* `make MAKE="make -j6" && make install`
+
 ### Windows
 * MinGW-W64 (https://sourceforge.net/projects/mingw-w64/, use online installer)
 	* Add both [MinGW installation directory]/x86_64-w64-mingw32/bin and [MinGW installation directory]/bin to PATH
