@@ -23,7 +23,7 @@ constexpr static float kDefaultEyeAzimuth = 0.0f;
 constexpr static float kDefaultEyeElevation = 45.0f;
 constexpr static float kZoomSpeed = 0.1f;
 
-constexpr static int kShadowMapSize = 4096;
+constexpr static int kShadowMapSize = 2048;
 
 constexpr bool kDebugRenderDepth = false;
 }

@@ -28,7 +28,7 @@ constexpr static int kGpuTextureWidth = 2048;
 constexpr static int kGpuTextureHeight = 2048;
 }
 
-UI::UI() : 
+UI::UI() :
     shader_(nullptr),
     initialized_(false),
     vao_id_(0) {}
