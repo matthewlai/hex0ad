@@ -41,6 +41,8 @@ class Renderable {
  public:
   struct RenderContext {
     uint64_t frame_counter;
+    uint64_t frame_start_time;
+
     glm::mat4 view;
     glm::mat4 projection;
 
@@ -179,6 +181,7 @@ class Renderer {
 
  private:
   glm::vec3 EyePos();
+  void UpdateEyePos(int64_t elapsed_time_us);
   glm::vec3 LightPos();
 
   void DrawQuad();

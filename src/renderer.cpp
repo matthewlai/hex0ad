@@ -21,7 +21,7 @@ constexpr static float kFov = 60.0f;
 constexpr static float kDefaultEyeDistance = 70.0f;
 constexpr static float kDefaultEyeAzimuth = 0.0f;
 constexpr static float kDefaultEyeElevation = 45.0f;
-constexpr static float kZoomSpeed = 0.1f;
+constexpr static float kZoomSpeed = 1e-5f;
 
 constexpr static int kShadowMapSize = 2048;
 
@@ -82,6 +82,9 @@ Renderer::Renderer() {
   view_centre_ = glm::vec3(0.0, 0.0, 0.0);
 
   first_frame_ = true;
+
+  render_context_.frame_counter = 0;
+  render_context_.frame_start_time = GetTimeUs();
 }
 
 void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
@@ -151,6 +154,10 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     TextureManager::GetInstance()->ResizeColourTexture(geometry_colour_texture_, window_width, window_height);
     TextureManager::GetInstance()->ResizeDepthTexture(geometry_depth_texture_, window_width, window_height);
   }
+  
+  uint64_t time_now = GetTimeUs();
+  int64_t time_since_last_frame = time_now - render_context_.frame_start_time;
+  render_context_.frame_start_time = time_now;
 
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glEnable(GL_CULL_FACE);
@@ -159,6 +166,8 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
 
   render_context_.window_width = window_width;
   render_context_.window_height = window_height;
+
+  UpdateEyePos(time_since_last_frame);
 
   render_context_.eye_pos = EyePos();
   render_context_.light_pos = LightPos();
@@ -241,10 +250,12 @@ glm::vec3 Renderer::EyePos() {
   float eye_avimuth_rad = eye_azimuth_ * M_PI / 180.0f;
   float eye_elevation_rad = eye_elevation_ * M_PI / 180.0f;
 
-  eye_distance_ += (eye_distance_target_ - eye_distance_) * kZoomSpeed;
-
   return view_centre_ + glm::normalize(
       glm::vec3(sin(eye_avimuth_rad), cos(eye_avimuth_rad), tan(eye_elevation_rad))) * eye_distance_;
+}
+
+void Renderer::UpdateEyePos(int64_t elapsed_time_us) {
+  eye_distance_ += (eye_distance_target_ - eye_distance_) * (1.0f - exp(-kZoomSpeed * static_cast<float>(elapsed_time_us)));
 }
 
 glm::vec3 Renderer::LightPos() {
