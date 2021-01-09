@@ -28,11 +28,9 @@ class Terrain : public Renderable {
  private:
   ShaderProgram* shader_;
   bool initialized_;
-  GLuint vertices_vbo_id_;
-  GLuint indices_vbo_id_;
+  GLuint vao_id_;
   std::size_t num_indices_;
-  GLuint edges_vertices_vbo_id_;
-  GLuint edges_indices_vbo_id_;
+  GLuint edges_vao_id_;
   std::size_t edges_num_indices_;
 
   bool render_ground_;

@@ -36,27 +36,20 @@ constexpr bool kDebugRenderDepth = false;
 }
 
 TestTriangleRenderable::TestTriangleRenderable() {
-  const static GLfloat vertices[] = { 0.0f, 1.0f, 0.0f,
+  const static std::vector<GLfloat> vertices = { 0.0f, 1.0f, 0.0f,
                                       0.0f, 0.0f, 1.0f,
                                       0.0f,  -1.0f, 0.0f, };
-  const static GLuint indices[] = {
+  const static std::vector<GLuint> indices = {
     0, 1, 2,
     2, 1, 0
   };
 
   simple_shader_ = GetShader("shaders/simple.vs", "shaders/simple.fs");
-  glGenBuffers(1, &vertices_vbo_id_);
-  glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);
-  glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 3 * 3, vertices, GL_STATIC_DRAW);
 
-  glGenBuffers(1, &indices_vbo_id_);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);
-  glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * 3 * 2, indices, GL_STATIC_DRAW);
-}
-
-TestTriangleRenderable::~TestTriangleRenderable() {
-  glDeleteBuffers(1, &vertices_vbo_id_);
-  glDeleteBuffers(1, &indices_vbo_id_);
+  vao_id_ = Renderer::MakeVAO({
+    Renderer::VBOSpec(vertices, 0, GL_FLOAT, 3),
+  },
+  Renderer::EBOSpec(indices));
 }
 
 void TestTriangleRenderable::Render(RenderContext* context) {
@@ -71,28 +64,14 @@ void TestTriangleRenderable::Render(RenderContext* context) {
   simple_shader_->Activate();
   simple_shader_->SetUniform("mvp"_name, mvp);
 
-  glEnableVertexAttribArray(0);
-
-  glBindBuffer(GL_ARRAY_BUFFER, vertices_vbo_id_);
-  glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (const void*) 0);
-
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);
+  Renderer::UseVAO(vao_id_);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (const void*)0);
-
-  glDisableVertexAttribArray(0);
 }
 
 Renderer::Renderer() {
   #define GraphicsSetting(upper, lower, type, default, toggle_key) render_context_.lower = default;
   GRAPHICS_SETTINGS
   #undef GraphicsSetting
-
-  #ifdef USE_OPENGL
-  // OpenGL core profile doesn't have a default VAO. Use a single VAO for now.
-  unsigned int vao;
-  glGenVertexArrays(1, &vao);
-  glBindVertexArray(vao); 
-  #endif
 
   eye_azimuth_ = kDefaultEyeAzimuth;
   eye_elevation_ = kDefaultEyeElevation;
@@ -133,7 +112,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     }
 
     glGenFramebuffers(1, &geometry_fb_);
-    geometry_colour_texture_ = TextureManager::GetInstance()->MakeStreamingTexture(window_width, window_height);
+    geometry_colour_texture_ = TextureManager::GetInstance()->MakeColourTexture(window_width, window_height);
     geometry_depth_texture_ = TextureManager::GetInstance()->MakeDepthTexture(window_width, window_height);
     TextureManager::GetInstance()->BindTexture(geometry_colour_texture_, GL_TEXTURE0 + kGeometryColourTextureUnit);
 
@@ -156,8 +135,10 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     indices.push_back(0); indices.push_back(2); indices.push_back(1);
     indices.push_back(3); indices.push_back(1); indices.push_back(2);
 
-    quad_vertices_vbo_id_ = MakeAndUploadVBO(GL_ARRAY_BUFFER, positions);
-    quad_indices_vbo_id_ = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, indices);
+    quad_vao_id_ = MakeVAO({
+      VBOSpec(positions, 0, GL_FLOAT, 2),
+    },
+    EBOSpec(indices));
   }
 
   SDL_GL_GetDrawableSize(window_, &window_width, &window_height);
@@ -167,7 +148,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     last_window_height_ = window_height;
 
     // Resize our textures.
-    TextureManager::GetInstance()->ResizeStreamingTexture(geometry_colour_texture_, window_width, window_height);
+    TextureManager::GetInstance()->ResizeColourTexture(geometry_colour_texture_, window_width, window_height);
     TextureManager::GetInstance()->ResizeDepthTexture(geometry_depth_texture_, window_width, window_height);
   }
 
@@ -252,10 +233,8 @@ void Renderer::MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t 
 }
 
 void Renderer::DrawQuad() {
-  UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 2, quad_vertices_vbo_id_);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quad_indices_vbo_id_);
+  UseVAO(quad_vao_id_);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (const void*) 0);
-  glDisableVertexAttribArray(0);
 }
 
 glm::vec3 Renderer::EyePos() {
@@ -295,4 +274,44 @@ glm::vec3 Renderer::UnProjectToXY(int32_t x, int32_t y) {
   // c = -point0.z / dir.z
   // point0 + c * dir = vec3(x, y, 0)
   return point0 + (-point0.z / dir.z) * dir;
+}
+
+/*static*/ GLuint Renderer::MakeVAO(std::initializer_list<Renderer::VBOSpec> vbos, const Renderer::EBOSpec& ebo) {
+  GLuint vao;
+  glGenVertexArrays(1, &vao);
+  CHECK_GL_ERROR
+  glBindVertexArray(vao);
+  CHECK_GL_ERROR
+  for (const Renderer::VBOSpec& vbo : vbos) {
+    glEnableVertexAttribArray(vbo.attrib_location);
+    CHECK_GL_ERROR
+    GLuint vbo_id = MakeAndUploadBuf(GL_ARRAY_BUFFER, vbo.data, vbo.data_size);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_id);
+    CHECK_GL_ERROR
+    glVertexAttribPointer(vbo.attrib_location, vbo.components_per_element, vbo.gl_type, GL_FALSE, 0, (const void*) 0);
+    CHECK_GL_ERROR
+  }
+  GLuint ebo_id = MakeAndUploadBuf(GL_ELEMENT_ARRAY_BUFFER, ebo.data, ebo.data_size);
+  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebo_id);
+  CHECK_GL_ERROR
+  return vao;
+}
+
+/*static*/ void Renderer::UseVAO(GLuint vao) {
+  static GLuint current_vao = 0;
+  if (vao != current_vao) {
+    glBindVertexArray(vao);
+    current_vao = vao;
+  }
+}
+
+/*static*/ GLuint Renderer::MakeAndUploadBuf(GLenum binding_target, const void* buf, std::size_t size) {
+  GLuint buf_id;
+  glGenBuffers(1, &buf_id);
+  CHECK_GL_ERROR
+  glBindBuffer(binding_target, buf_id);
+  CHECK_GL_ERROR
+  glBufferData(binding_target, size, buf, GL_STATIC_DRAW);
+  CHECK_GL_ERROR
+  return buf_id;
 }

@@ -100,6 +100,8 @@ ShaderCompileResult CompileShader(GLenum shader_type,
 }
 } // namespace
 
+/*static*/ GLuint ShaderProgram::current_program_ = 0;
+
 ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
                              const std::string& fragment_shader_file_name) 
   : vertex_shader_file_name_(vertex_shader_file_name),

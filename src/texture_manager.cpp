@@ -50,7 +50,7 @@ void TextureManager::BindTexture(GLuint texture, GLenum texture_unit) {
   glBindTexture(GL_TEXTURE_2D, texture);
 }
 
-GLuint TextureManager::MakeStreamingTexture(int width, int height) {
+GLuint TextureManager::MakeColourTexture(int width, int height) {
   glActiveTexture(GL_TEXTURE0);
   GLuint texture_id;
   glGenTextures(1, &texture_id);
@@ -95,7 +95,7 @@ GLuint TextureManager::MakeDepthTexture(int width, int height) {
   return texture_id;
 }
 
-void TextureManager::ResizeStreamingTexture(GLuint texture_id, int width, int height) {
+void TextureManager::ResizeColourTexture(GLuint texture_id, int width, int height) {
   glActiveTexture(GL_TEXTURE0);
   glBindTexture(GL_TEXTURE_2D, texture_id);
   glTexImage2D(GL_TEXTURE_2D, /*level=*/0, /*internalFormat=*/GL_RGBA, width, height,

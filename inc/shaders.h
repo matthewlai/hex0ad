@@ -15,7 +15,12 @@ class ShaderProgram {
   ShaderProgram(const std::string& vertex_shader_file_name,
                 const std::string& fragment_shader_file_name);
 
-  void Activate() { glUseProgram(program_); }
+  void Activate() {
+    if (current_program_ != program_) {
+      glUseProgram(program_);
+      current_program_ = program_;
+    }
+  }
 
   // We shouldn't need to check for -1 because glUniform*(-1, ...)
   // is supposed to be silently ignored (no-op). Unfortunately
@@ -23,7 +28,11 @@ class ShaderProgram {
   void SetUniform(const NameLiteral& name, GLint x) {
     GLint location = GetUniformLocation(name);
     if (location != -1) {
-      glUniform1i(location, x);
+      GLint *cached = uniform_cache_1i_.Find(name);
+      if (!cached || *cached != x) {
+        glUniform1i(location, x);
+        uniform_cache_1i_.InsertOrReplace(name, x);
+      }
     }
   }
 
@@ -80,6 +89,8 @@ class ShaderProgram {
  private:
   GLint GetUniformLocation(const NameLiteral& name);
 
+  static GLuint current_program_;
+
   std::string vertex_shader_file_name_;
   std::string fragment_shader_file_name_;
   GLuint vertex_shader_;
@@ -87,6 +98,7 @@ class ShaderProgram {
   GLuint program_;
 
   LinearCache<NameLiteral, GLint> uniform_locations_cache_;
+  LinearCache<NameLiteral, GLint> uniform_cache_1i_;
 };
 
 // Get a pointer to a ShaderProgram built from the specified

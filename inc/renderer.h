@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 
 #include "flatbuffers/flatbuffers.h"
@@ -67,17 +68,57 @@ class Renderable {
 class TestTriangleRenderable : public Renderable {
  public:
   TestTriangleRenderable();
-  virtual ~TestTriangleRenderable();
+  virtual ~TestTriangleRenderable() {}
   void Render(RenderContext* context) override;
 
  private:
   ShaderProgram* simple_shader_;
-  GLuint vertices_vbo_id_;
-  GLuint indices_vbo_id_;
+  GLuint vao_id_;
 };
 
 class Renderer {
  public:
+  struct VBOSpec {
+    // Pointer to data to buffer.
+    const void* data;
+
+    // Size of the buffer in bytes.
+    std::size_t data_size;
+
+    int attrib_location;
+    GLenum gl_type;
+    int components_per_element;
+
+    template <typename T>
+    VBOSpec(const std::vector<T>& buf, int attrib_location_i, GLenum gl_type_i, int components_per_element_i) 
+        : data(buf.data()), data_size(buf.size() * sizeof(T)), attrib_location(attrib_location_i), gl_type(gl_type_i),
+          components_per_element(components_per_element_i) {}
+
+    template <typename T>
+    VBOSpec(const flatbuffers::Vector<T>& buf, int attrib_location_i, GLenum gl_type_i, int components_per_element_i) 
+        : data(buf.data()), data_size(static_cast<std::size_t>(buf.size()) * sizeof(T)), attrib_location(attrib_location_i),
+          gl_type(gl_type_i), components_per_element(components_per_element_i) {}
+  };
+
+  struct EBOSpec {
+    // Pointer to data to buffer.
+    const void* data;
+
+    // Size of the buffer in elements.
+    std::size_t data_size;
+
+    // Size per element.
+    std::size_t element_size;
+
+    template <typename T>
+    EBOSpec(const std::vector<T>& buf) 
+        : data(buf.data()), data_size(buf.size() * sizeof(T)) {}
+
+    template <typename T>
+    EBOSpec(const flatbuffers::Vector<T>& buf) 
+        : data(buf.data()), data_size(static_cast<std::size_t>(buf.size()) * sizeof(T)) {}
+  };
+
   Renderer();
 
   void RenderFrame(const std::vector<Renderable*>& renderables);
@@ -114,7 +155,9 @@ class Renderer {
 
   void MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t y_to);
 
-  void DrawQuad();
+  static GLuint MakeVAO(std::initializer_list<VBOSpec> vbos, const EBOSpec& ebo);
+
+  static void UseVAO(GLuint vao);
 
   // UnProject screen coordinates to a point on the z=0 plane.
   glm::vec3 UnProjectToXY(int32_t x, int32_t y);
@@ -137,6 +180,10 @@ class Renderer {
  private:
   glm::vec3 EyePos();
   glm::vec3 LightPos();
+
+  void DrawQuad();
+
+  static GLuint MakeAndUploadBuf(GLenum binding_target, const void* buf, std::size_t size);
 
   Renderable::RenderContext render_context_;
 
@@ -166,39 +213,8 @@ class Renderer {
   GLuint geometry_colour_texture_;
   GLuint geometry_depth_texture_;
 
-  GLuint quad_vertices_vbo_id_;
-  GLuint quad_indices_vbo_id_;
+  GLuint quad_vao_id_;
 };
-
-template <typename T>
-GLuint MakeAndUploadVBOImpl(GLenum binding_target, const T* buf, std::size_t size) {
-  GLuint vbo_id;
-  glGenBuffers(1, &vbo_id);
-  CHECK_GL_ERROR
-  glBindBuffer(binding_target, vbo_id);
-  CHECK_GL_ERROR
-  glBufferData(binding_target, sizeof(T) * size, buf, GL_STATIC_DRAW);
-  CHECK_GL_ERROR
-  return vbo_id;
-}
-
-template <typename T>
-GLuint MakeAndUploadVBO(GLenum binding_target, const std::vector<T>& buf) {
-  return MakeAndUploadVBOImpl<T>(binding_target, buf.data(), buf.size());
-}
-
-template <typename T>
-GLuint MakeAndUploadVBO(GLenum binding_target, const flatbuffers::Vector<T>& buf) {
-  return MakeAndUploadVBOImpl<T>(binding_target, buf.data(), static_cast<std::size_t>(buf.size()));
-}
-
-// Enable a VBO and bind it to a target and attribute location.
-inline void UseVBO(GLenum binding_target, int attrib_location, GLenum gl_type,
-            int components_per_element, GLuint vbo_id) {
-  glEnableVertexAttribArray(attrib_location);
-  glBindBuffer(binding_target, vbo_id);
-  glVertexAttribPointer(attrib_location, components_per_element, gl_type, GL_FALSE, 0, (const void*) 0);
-}
 
 #endif // RENDERER_H
 

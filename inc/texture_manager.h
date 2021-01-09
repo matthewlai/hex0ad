@@ -30,10 +30,10 @@ class TextureManager {
   void BindTexture(const std::string& texture_name, GLenum texture_unit);
   void BindTexture(GLuint texture, GLenum texture_unit);
 
-  GLuint MakeStreamingTexture(int width, int height);
+  GLuint MakeColourTexture(int width, int height);
   GLuint MakeDepthTexture(int width, int height);
 
-  void ResizeStreamingTexture(GLuint texture, int width, int height);
+  void ResizeColourTexture(GLuint texture, int width, int height);
   void ResizeDepthTexture(GLuint texture, int width, int height);
 
   // Stream data to the currently active texture unit (and bound texture).

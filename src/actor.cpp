@@ -23,13 +23,9 @@ struct MeshGPUData {
   ShaderProgram* shader;
   ShaderProgram* shadow_shader;
 
-  GLuint vertices_vbo_id;
-  GLuint normals_vbo_id;
-  GLuint tangents_vbo_id;
-  GLuint tex_coords_vbo_id;
-  GLuint ao_tex_coords_vbo_id;
+  GLuint vao_id;
+  GLuint shadow_vao_id;
 
-  GLuint indices_vbo_id;
   GLsizei num_indices;
 };
 
@@ -79,12 +75,19 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     data.shader->Activate();
 
     // Upload all the vertex attributes to the GPU.
-    data.vertices_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->vertices());
-    data.normals_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->normals());
-    data.tangents_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->tangents());
-    data.tex_coords_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->tex_coords());
-    data.ao_tex_coords_vbo_id = MakeAndUploadVBO(GL_ARRAY_BUFFER, *mesh_data->ao_tex_coords());
-    data.indices_vbo_id = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, *mesh_data->vertex_indices());
+    data.vao_id = Renderer::MakeVAO({
+      Renderer::VBOSpec(*mesh_data->vertices(), 0, GL_FLOAT, 3),
+      Renderer::VBOSpec(*mesh_data->normals(), 1, GL_FLOAT, 3),
+      Renderer::VBOSpec(*mesh_data->tangents(), 2, GL_FLOAT, 3),
+      Renderer::VBOSpec(*mesh_data->tex_coords(), 3, GL_FLOAT, 2),
+      Renderer::VBOSpec(*mesh_data->ao_tex_coords(), 4, GL_FLOAT, 2),
+    },
+    Renderer::EBOSpec(*mesh_data->vertex_indices()));
+
+    data.shadow_vao_id = Renderer::MakeVAO({
+      Renderer::VBOSpec(*mesh_data->vertices(), 0, GL_FLOAT, 3),
+    },
+    Renderer::EBOSpec(*mesh_data->vertex_indices()));
 
     data.num_indices = mesh_data->vertex_indices()->size();
     it = mesh_gpu_data_cache.insert(std::make_pair(mesh_file_name, data)).first;
@@ -102,10 +105,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   Renderable::SetLightParams(context, shader);
 
   if (shadow_pass) {
-    UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.indices_vbo_id);
+    Renderer::UseVAO(data.shadow_vao_id);
     glDrawElements(GL_TRIANGLES, data.num_indices, GL_UNSIGNED_INT, (const void*) 0);
-    glDisableVertexAttribArray(0);
   } else {
     shader->SetUniform("model"_name, model);
 
@@ -131,24 +132,10 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
       shader->SetUniform("use_player_colour", 0);
     }
 
-    TextureManager::GetInstance()->BindTexture(textures.base_texture, GL_TEXTURE0);
-
     TextureManager::GetInstance()->UseTextureSet(shader, textures);
 
-    UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, data.vertices_vbo_id);
-    UseVBO(GL_ARRAY_BUFFER, 1, GL_FLOAT, 3, data.normals_vbo_id);
-    UseVBO(GL_ARRAY_BUFFER, 2, GL_FLOAT, 3, data.tangents_vbo_id);
-    UseVBO(GL_ARRAY_BUFFER, 3, GL_FLOAT, 2, data.tex_coords_vbo_id);
-    UseVBO(GL_ARRAY_BUFFER, 4, GL_FLOAT, 2, data.ao_tex_coords_vbo_id);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, data.indices_vbo_id);
+    Renderer::UseVAO(data.vao_id);
     glDrawElements(GL_TRIANGLES, data.num_indices, GL_UNSIGNED_INT, (const void*) 0);
-
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
-    glDisableVertexAttribArray(3);
-    glDisableVertexAttribArray(4);
   }
 }
 }

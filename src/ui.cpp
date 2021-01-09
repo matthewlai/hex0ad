@@ -31,8 +31,7 @@ constexpr static int kGpuTextureHeight = 2048;
 UI::UI() : 
     shader_(nullptr),
     initialized_(false),
-    vertices_vbo_id_(0),
-    indices_vbo_id_(0) {}
+    vao_id_(0) {}
 
 void UI::Render(RenderContext* context) {
   if (context->pass != RenderPass::kUi) {
@@ -50,10 +49,12 @@ void UI::Render(RenderContext* context) {
     indices.push_back(0); indices.push_back(1); indices.push_back(2);
     indices.push_back(3); indices.push_back(2); indices.push_back(1);
 
-    vertices_vbo_id_ = MakeAndUploadVBO(GL_ARRAY_BUFFER, positions);
-    indices_vbo_id_ = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, indices);
+    vao_id_ = Renderer::MakeVAO({
+      Renderer::VBOSpec(positions, 0, GL_FLOAT, 2),
+    },
+    Renderer::EBOSpec(indices));
 
-    texture_ = TextureManager::GetInstance()->MakeStreamingTexture(
+    texture_ = TextureManager::GetInstance()->MakeColourTexture(
       kGpuTextureWidth, kGpuTextureHeight);
 
     shader_ = GetShader("shaders/ui.vs", "shaders/ui.fs");
@@ -91,8 +92,6 @@ void UI::Render(RenderContext* context) {
 
     SDL_FreeSurface(text);
   }
-
-  glDisableVertexAttribArray(0);
 }
 
 void UI::DrawImage(SDL_Surface* surface, float x, float y, float w, float h) {
@@ -142,7 +141,6 @@ void UI::DrawImage(SDL_Surface* surface, float x, float y, float w, float h) {
   shader_->SetUniform("tex_xywh", glm::vec4(
       0.0f, 0.0f, static_cast<float>(surface->w) / kGpuTextureWidth, static_cast<float>(surface->h) / kGpuTextureHeight));
 
-  UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 2, vertices_vbo_id_);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);
+  Renderer::UseVAO(vao_id_);
   glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (const void*) 0);
 }

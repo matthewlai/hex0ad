@@ -27,8 +27,7 @@ class UI : public Renderable {
 
   ShaderProgram* shader_;
   bool initialized_;
-  GLuint vertices_vbo_id_;
-  GLuint indices_vbo_id_;
+  GLuint vao_id_;
 
   std::vector<std::string> debug_text_;
 

@@ -97,11 +97,9 @@ void DrawHexRing(const Hex& hex, std::vector<float>* positions, std::vector<GLui
 Terrain::Terrain() : 
     shader_(nullptr),
     initialized_(false),
-    vertices_vbo_id_(0),
-    indices_vbo_id_(0),
+    vao_id_(0),
     num_indices_(0),
-    edges_vertices_vbo_id_(0),
-    edges_indices_vbo_id_(0),
+    edges_vao_id_(0),
     edges_num_indices_(0),
     render_ground_(true),
     terrain_selection_(0) {}
@@ -130,12 +128,16 @@ void Terrain::Render(RenderContext* context) {
       });
     }
 
-    vertices_vbo_id_ = MakeAndUploadVBO(GL_ARRAY_BUFFER, positions);
-    indices_vbo_id_ = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, indices);
+    vao_id_ = Renderer::MakeVAO({
+      Renderer::VBOSpec(positions, 0, GL_FLOAT, 3),
+    },
+    Renderer::EBOSpec(indices));
     num_indices_ = indices.size();
 
-    edges_vertices_vbo_id_ = MakeAndUploadVBO(GL_ARRAY_BUFFER, edge_positions);
-    edges_indices_vbo_id_ = MakeAndUploadVBO(GL_ELEMENT_ARRAY_BUFFER, edge_indices);
+    edges_vao_id_ = Renderer::MakeVAO({
+      Renderer::VBOSpec(edge_positions, 0, GL_FLOAT, 3),
+    },
+    Renderer::EBOSpec(edge_indices));
     edges_num_indices_ = edge_indices.size();
 
     shader_ = GetShader("shaders/terrain.vs", "shaders/terrain.fs");
@@ -163,20 +165,16 @@ void Terrain::Render(RenderContext* context) {
   #undef GraphicsSetting
 
   TextureSet* textures = TerrainTextureSet(kTestTerrainPaths[terrain_selection_]);
-
   TextureManager::GetInstance()->UseTextureSet(shader_, *textures);
 
   glm::mat4 mvp = context->projection * context->view;
   shader_->SetUniform("mvp"_name, mvp);
+
   shader_->SetUniform("is_edge"_name, 0);
-  UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, vertices_vbo_id_);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indices_vbo_id_);
+  Renderer::UseVAO(vao_id_);
   glDrawElements(GL_TRIANGLES, num_indices_, GL_UNSIGNED_INT, (const void*) 0);
 
   shader_->SetUniform("is_edge"_name, 1);
-  UseVBO(GL_ARRAY_BUFFER, 0, GL_FLOAT, 3, edges_vertices_vbo_id_);
-  glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, edges_indices_vbo_id_);
+  Renderer::UseVAO(edges_vao_id_);
   glDrawElements(GL_TRIANGLES, edges_num_indices_, GL_UNSIGNED_INT, (const void*) 0);
-
-  glDisableVertexAttribArray(0);
 }
