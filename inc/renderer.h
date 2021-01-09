@@ -157,8 +157,6 @@ class Renderer {
   int last_window_width_;
   int last_window_height_;
 
-  ShaderProgram* fxaa_shader_;
-
   // Target of the shadow map pass.
   GLuint shadow_map_fb_;
   GLuint shadow_map_texture_;

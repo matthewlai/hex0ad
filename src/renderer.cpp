@@ -146,8 +146,6 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    fxaa_shader_ = GetShader("shaders/passthrough.vs", "shaders/fxaa.fs");
-
     std::vector<float> positions;
     positions.push_back(0.0f); positions.push_back(0.0f); // v0
     positions.push_back(0.0f); positions.push_back(1.0f); // v1
@@ -211,11 +209,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
 
   if (!kDebugRenderDepth) {
     // Geometry pass
-    if (render_context_.use_fxaa) {
-      glBindFramebuffer(GL_FRAMEBUFFER, geometry_fb_);
-    } else {
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, window_width, window_height);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -232,20 +226,6 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     render_context_.pass = RenderPass::kGeometry;
     for (auto* renderable : renderables) {
       renderable->Render(&render_context_);
-    }
-
-    // FXAA pass.
-    if (render_context_.use_fxaa) {
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
-      glViewport(0, 0, window_width, window_height);
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-      glDisable(GL_DEPTH_TEST);
-
-      fxaa_shader_->Activate();
-      fxaa_shader_->SetUniform("tex", kGeometryColourTextureUnit);
-      fxaa_shader_->SetUniform("rcp_target_size", glm::vec2(1.0f / window_width, 1.0f / window_height));
-
-      DrawQuad();
     }
 
     // UI pass.

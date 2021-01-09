@@ -273,12 +273,6 @@ int main(int /*argc*/, char** /*argv*/) {
 
   g_state.renderer = std::make_unique<Renderer>();
 
-  #ifdef __EMSCRIPTEN__
-  // Disable FXAA by default for Emscripten for now as it seems to induce not reduce aliasing at least on some
-  // platforms + browsers.
-  g_state.renderer->SetUseFXAA(false);
-  #endif
-
   g_state.terrain = std::make_unique<Terrain>();
 
   g_state.ui = std::make_unique<UI>();
