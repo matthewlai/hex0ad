@@ -212,10 +212,10 @@ bool main_loop() {
 
   std::vector<Renderable*> renderables;
 
-  renderables.push_back(g_state.terrain.get());
   for (auto& actor : g_state.actors) {
     renderables.push_back(&actor);
   }
+  renderables.push_back(g_state.terrain.get());
   renderables.push_back(g_state.ui.get());
 
   g_state.renderer->RenderFrame(renderables);
