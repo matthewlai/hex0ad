@@ -23,6 +23,8 @@ namespace {
 const static int kScreenWidth = 1920;
 const static int kScreenHeight = 1080;
 
+const static int64_t kFrameRateReportIntervalUs = 330000;
+
 struct ProgramState {
   SDL_Window* window;
   bool fullscreen = false;
@@ -32,6 +34,8 @@ struct ProgramState {
   std::unique_ptr<UI> ui;
   int32_t last_mouse_x;
   int32_t last_mouse_y;
+
+  bool vsync_on = false;
 } g_state;
 
 SDL_GLContext InitSDL() {
@@ -119,26 +123,12 @@ SDL_GLContext InitSDL() {
   LOG_INFO("Shading language version: %",
            glGetString(GL_SHADING_LANGUAGE_VERSION));
 
-  // First try to enable adaptive vsync.
-  if (SDL_GL_SetSwapInterval(-1) == 0) {
-    LOG_INFO("Using adaptive vsync");
-  } else {
-    LOG_WARN("Failed to enable adaptive vsync: %", SDL_GetError());
-    
-    // If that didn't work, try standard vsync.
-    if (SDL_GL_SetSwapInterval(1) == 0) {
-      LOG_INFO("Using vsync");
-    } else {
-      LOG_WARN("Failed to enable vsync: %", SDL_GetError());
-    }
-  }
-
   return context;
 }
 
 bool main_loop() {
-  static uint64_t last_frame_time = GetTimeUs() - 16666;
-  static float filtered_framerate = 0.0f;
+  static uint64_t last_frame_rate_report = GetTimeUs();
+  static uint64_t frames_since_last_report = 0;
 
   int mouse_x;
   int mouse_y;
@@ -220,17 +210,36 @@ bool main_loop() {
 
   g_state.renderer->RenderFrame(renderables);
 
-  uint64_t this_frame_time = GetTimeUs();
-  if (this_frame_time > last_frame_time) {
-    float frame_rate = 1000000.0f / (this_frame_time - last_frame_time);
-    // Use the frame rate as a min-tracking filter.
-    if (frame_rate < filtered_framerate) {
-      filtered_framerate = frame_rate;
+  ++frames_since_last_report;
+
+  uint64_t time_now = GetTimeUs();
+  int64_t elapsed = time_now - last_frame_rate_report;
+  if (elapsed > kFrameRateReportIntervalUs) {
+    double avg_frame_time_ms = static_cast<double>(elapsed) / frames_since_last_report / 1000.0;
+    g_state.ui->SetDebugText(0, FormatString("Avg Frame Time: % ms (% FPS)", avg_frame_time_ms, 1000.0 / avg_frame_time_ms));
+    frames_since_last_report = 0;
+    last_frame_rate_report = time_now;
+  }
+
+  if (g_state.vsync_on && !g_state.renderer->UseVsync()) {
+    SDL_GL_SetSwapInterval(0);
+    g_state.vsync_on = false;
+    LOG_INFO("Vsync on");
+  } else if (!g_state.vsync_on && g_state.renderer->UseVsync()) {
+    // First try to enable adaptive vsync.
+    if (SDL_GL_SetSwapInterval(-1) == 0) {
+      LOG_INFO("Using adaptive vsync");
     } else {
-      filtered_framerate = filtered_framerate * 0.95f + frame_rate * 0.05f;
+      LOG_WARN("Failed to enable adaptive vsync: %", SDL_GetError());
+      
+      // If that didn't work, try standard vsync.
+      if (SDL_GL_SetSwapInterval(1) == 0) {
+        LOG_INFO("Using vsync");
+      } else {
+        LOG_WARN("Failed to enable vsync: %", SDL_GetError());
+      }
     }
-    g_state.ui->SetDebugText(0, FormatString("FPS: %", filtered_framerate));
-    last_frame_time = this_frame_time;
+    g_state.vsync_on = true;
   }
 
   return quit;
