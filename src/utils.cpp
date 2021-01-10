@@ -67,7 +67,7 @@ void APIENTRY GlDebugOutput(GLenum source,
       case GL_DEBUG_TYPE_MARKER: level = Logger::eLevel::INFO; break;
       case GL_DEBUG_TYPE_PUSH_GROUP: level = Logger::eLevel::INFO; break;
       case GL_DEBUG_TYPE_POP_GROUP: level = Logger::eLevel::INFO; break;
-      case GL_DEBUG_TYPE_OTHER: level = Logger::eLevel::INFO; break;
+      default: level = Logger::eLevel::INFO; break;
   }
 
   logger.Log(level, "[OpenGL] (%, %) %", log_severity, id, message);
