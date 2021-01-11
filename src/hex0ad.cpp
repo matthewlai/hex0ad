@@ -224,7 +224,7 @@ bool main_loop() {
   if (g_state.vsync_on && !g_state.renderer->UseVsync()) {
     SDL_GL_SetSwapInterval(0);
     g_state.vsync_on = false;
-    LOG_INFO("Vsync on");
+    LOG_INFO("Vsync off");
   } else if (!g_state.vsync_on && g_state.renderer->UseVsync()) {
     // First try to enable adaptive vsync.
     if (SDL_GL_SetSwapInterval(-1) == 0) {
