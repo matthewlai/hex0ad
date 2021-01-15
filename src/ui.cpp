@@ -15,8 +15,6 @@
 namespace {
 constexpr static const char* kFontPath = "assets/fonts/RobotoMono-Regular.ttf";
 
-// Higher font size = higher resolution rendering.
-constexpr static int kFontSize = 40;
 constexpr static float kLineHeight = 0.02f;
 constexpr static float kLineSpacing = 0.018f;
 constexpr static float kLineXOffset = 0.003f;
@@ -63,14 +61,22 @@ void UI::Render(RenderContext* context) {
       LOG_ERROR("Failed to initialize SDL_ttf: %", TTF_GetError());
     }
 
-    font_ = TTF_OpenFont(kFontPath, kFontSize);
-    if (!font_) {
-      LOG_ERROR("Failed to open font: %", TTF_GetError());
-    }
-
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     initialized_ = true;
+  }
+
+  int font_size = round(context->window_height * kLineHeight);
+
+  TTF_Font* font = nullptr;
+  if (font_cache_.find(font_size) != font_cache_.end()) {
+    font = font_cache_[font_size];
+  } else {
+    font = TTF_OpenFont(kFontPath, font_size);
+    if (!font) {
+      LOG_ERROR("Failed to open font: %", TTF_GetError());
+    }
+    font_cache_[font_size] = font;
   }
 
   shader_->Activate();
@@ -80,7 +86,7 @@ void UI::Render(RenderContext* context) {
       continue;
     }
 
-    SDL_Surface* text = TTF_RenderText_Blended(font_, debug_text_[i].c_str(), SDL_Color{255, 255, 255, 255});
+    SDL_Surface* text = TTF_RenderText_Blended(font, debug_text_[i].c_str(), SDL_Color{255, 255, 255, 255});
 
     if (!text) {
       LOG_ERROR("Failed to generate debug text for UI: %", TTF_GetError());

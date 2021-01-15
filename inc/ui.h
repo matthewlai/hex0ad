@@ -1,6 +1,7 @@
 #ifndef UI_H
 #define UI_H
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -31,7 +32,7 @@ class UI : public Renderable {
 
   std::vector<std::string> debug_text_;
 
-  TTF_Font* font_;
+  std::map<int, TTF_Font*> font_cache_;
   GLuint texture_;
 };
 
