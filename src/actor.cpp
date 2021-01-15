@@ -113,7 +113,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
     shader->SetUniform("normal_matrix"_name, normal_matrix);
 
-    glm::vec3 player_colour(0.0f, 0.0f, 1.0f);
+    glm::vec3 player_colour(0.6f, 0.0f, 0.0f);
     shader->SetUniform("player_colour"_name, player_colour);
 
     // Graphics settings.
