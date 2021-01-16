@@ -10,13 +10,13 @@ const float kAoStrength = 1.0;
 
 const float kShininess = 4.0;
 
-uniform bool use_player_colour;
+uniform bool use_alpha_colour;
 
 out vec4 frag_colour;
 
 #include "light.finc"
 
 void main() {
-  frag_colour = compute_lighting(use_player_colour, /*ao_strength=*/kAoStrength, kAmbientLight, kDirectionalLightIntensity, kShininess);
+  frag_colour = compute_lighting(use_alpha_colour, /*ao_strength=*/kAoStrength, kAmbientLight, kDirectionalLightIntensity, kShininess);
 }
 

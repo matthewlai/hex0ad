@@ -58,7 +58,8 @@ std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_na
 }
 
 void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, const glm::mat4& vp,
-                const glm::mat4& model, bool use_player_colour, Renderable::RenderContext* context) {
+                const glm::mat4& model, std::optional<glm::vec3> maybe_alpha_colour,
+                Renderable::RenderContext* context) {
   static std::map<std::string, MeshGPUData> mesh_gpu_data_cache;
   bool shadow_pass = context->pass == RenderPass::kShadow;
   auto it = mesh_gpu_data_cache.find(mesh_file_name);
@@ -113,23 +114,23 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
     shader->SetUniform("normal_matrix"_name, normal_matrix);
 
-    glm::vec3 player_colour(0.6f, 0.0f, 0.0f);
-    shader->SetUniform("player_colour"_name, player_colour);
-
     // Graphics settings.
     #define GraphicsSetting(upper, lower, type, default, toggle_key) \
       shader->SetUniform(NameLiteral(#lower), context->lower);
     GRAPHICS_SETTINGS
     #undef GraphicsSetting
 
+    if (maybe_alpha_colour) {
+      shader->SetUniform("alpha_colour"_name, *maybe_alpha_colour);
+      shader->SetUniform("use_alpha_colour", 1);
+    } else {
+      shader->SetUniform("use_alpha_colour", 0);
+    }
+
     // Texture unit 0 for the base texture.
     if (textures.base_texture.empty()) {
       LOG_ERROR("No base texture. Skipping mesh.");
       return;
-    }
-
-    if (!use_player_colour) {
-      shader->SetUniform("use_player_colour", 0);
     }
 
     TextureManager::GetInstance()->UseTextureSet(shader, textures);
@@ -191,6 +192,7 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
   TextureSet textures;
   std::map<std::string, std::vector<ActorTemplate*>> props;
   std::map<std::string, glm::mat4> attachpoints;
+  std::optional<glm::vec3> object_colour;
 
   bool shadow_pass = context->pass == RenderPass::kShadow;
 
@@ -216,6 +218,11 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
         props[attachpoint].push_back(&GetTemplate(actor));
       }
     }
+
+    if (variant->object_colour()) {
+      object_colour = glm::vec3(
+          variant->object_colour()->r(), variant->object_colour()->g(), variant->object_colour()->b());
+    }
   }
 
   if (mesh_path.empty()) {
@@ -226,17 +233,21 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
 
   auto* material_field = actor_data_->material();
 
-  bool use_player_colour = true;
+  std::optional<glm::vec3> maybe_alpha_colour;
 
   if (!material_field) {
     LOG_ERROR("% has no material", actor_data_->path()->str());
   } else {
     std::string material = actor_data_->material()->str();
-    use_player_colour = material.find("player") != std::string::npos;
+    if (object_colour) {
+      maybe_alpha_colour = *object_colour;
+    } else if (material.find("player") != std::string::npos) {
+      maybe_alpha_colour = glm::vec3(0.6f, 0.0f, 0.0f);
+    }
   }
 
   RenderMesh(mesh_path, textures, context->projection * context->view,
-             model * attachpoints["main_mesh"], use_player_colour, context);
+             model * attachpoints["main_mesh"], maybe_alpha_colour, context);
 
   for (auto& [point, actor_templates] : props) {
     for (auto& actor_template : actor_templates) {

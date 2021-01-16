@@ -10,6 +10,12 @@ table Prop {
   attachpoint:string;
 }
 
+struct Colour {
+  r:float;
+  g:float;
+  b:float;
+}
+
 // Variants with frequency > 0 may be randomly selected.
 // Variants with frequency = 0 are either disabled or selected by name.
 // Each variant may have animations, (1x) mesh, props, and/or textures.
@@ -19,6 +25,7 @@ table Variant {
   mesh_path:string;
   props:[Prop];
   textures:[Texture];
+  object_colour:Colour;
 }
 
 table Group {

@@ -24,7 +24,8 @@ uniform bool use_normal_map;
 uniform bool use_ao_map;
 uniform bool use_shadows;
 
-uniform vec3 player_colour;
+// This is either player colour or object colour (hair)
+uniform vec3 alpha_colour;
 
 // We scale depth bias by distance so zooming won't affect peter-paning.
 // Increasing this decreases shadow artifact when light hits almost parallel to a surface,
@@ -136,16 +137,16 @@ vec3 mix_colour(vec3 ambient, vec3 diffuse, vec3 specular) {
   return clamp(ambient + (diffuse + specular) * inv_in_shadow, 0.0, 1.0);
 }
 
-vec4 compute_lighting(bool use_player_colour, float ao_strength, vec3 ambient_light, float directional_intensity, float shininess) {
+vec4 compute_lighting(bool use_alpha_colour, float ao_strength, vec3 ambient_light, float directional_intensity, float shininess) {
   vec4 colour = texture(base_texture, tex_coords);
   vec3 base_colour = colour.rgb;
 
-  // Player colour computation:
+  // Player / object (hair) colour computation:
   // https://wildfiregames.com/forum/topic/18340-lowpoly-tips/
-  vec3 player_colour_mixed = base_colour * player_colour;
+  vec3 colour_mixed = base_colour * alpha_colour;
 
-  if (use_player_colour) {
-    base_colour = base_colour * colour.a + player_colour_mixed * (1.0 - colour.a);
+  if (use_alpha_colour) {
+    base_colour = base_colour * colour.a + colour_mixed * (1.0 - colour.a);
   }
 
   vec3 normal = normal_interpo;
@@ -175,7 +176,7 @@ vec4 compute_lighting(bool use_player_colour, float ao_strength, vec3 ambient_li
       ambient.rgb *= ao;
     }
 
-    if (use_player_colour) {
+    if (use_alpha_colour) {
       colour = vec4(mix_colour(ambient, diffuse, spec), 1.0f);
     } else {
       colour = vec4(mix_colour(ambient, diffuse, spec), colour.a);

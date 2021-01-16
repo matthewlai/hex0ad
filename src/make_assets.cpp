@@ -896,9 +896,24 @@ void MakeActor(const std::string& actor_path) {
         if (meshes.size() != 1) {
           throw std::runtime_error("More than one mesh in a variant?");
         }
-        mesh_path = meshes[0].FirstChild().ToNode()->Value();
+        mesh_path = GetTextContent(meshes[0]);
         ParseMesh(mesh_path);
         mesh_path = RemoveExtension(mesh_path) + ".fb";
+      }
+
+      auto colors = GetAllChildrenElements(xml_variant, "color");
+      std::optional<data::Colour> maybe_object_colour;
+      if (!colors.empty()) {
+        if (colors.size() != 1) {
+          throw std::runtime_error("More than one color in a variant?");
+        }
+        std::stringstream ss(GetTextContent(colors[0]));
+        float r, g, b;
+        ss >> r >> g >> b;
+        r /= 255.0f;
+        g /= 255.0f;
+        b /= 255.0f;
+        maybe_object_colour = data::Colour(r, g, b);
       }
 
       auto textures_containers = GetAllChildrenElements(xml_variant, "textures");
@@ -954,13 +969,23 @@ void MakeActor(const std::string& actor_path) {
         name = xml_variant.ToElement()->Attribute("name");
       }
 
-      variants.push_back(data::CreateVariant(
-          builder,
-          /*name=*/builder.CreateString(name),
-          /*frequency=*/frequency,
-          /*mesh_path=*/builder.CreateString(mesh_path),
-          /*props=*/builder.CreateVector(props_offsets),
-          /*textures=*/builder.CreateVector(texture_offsets)));
+      auto name_offset = builder.CreateString(name);
+      auto mesh_path_offset = builder.CreateString(mesh_path);
+      auto props_vector_offset = builder.CreateVector(props_offsets);
+      auto textures_vector_offset = builder.CreateVector(texture_offsets);
+
+      data::VariantBuilder variant_builder(builder);
+      variant_builder.add_name(name_offset);
+      variant_builder.add_frequency(frequency);
+      variant_builder.add_mesh_path(mesh_path_offset);
+      variant_builder.add_props(props_vector_offset);
+      variant_builder.add_textures(textures_vector_offset);
+
+      if (maybe_object_colour) {
+        variant_builder.add_object_colour(&(*maybe_object_colour));
+      }
+
+      variants.push_back(variant_builder.Finish());
     }
     groups.push_back(CreateGroup(builder, /*variants=*/builder.CreateVector(variants)));
   }
