@@ -2,6 +2,8 @@
 #define ACTOR_H
 
 #include <cstdint>
+#include <map>
+#include <memory>
 #include <optional>
 #include <random>
 #include <string>
@@ -33,15 +35,30 @@ class Actor : public Renderable {
   int NumGroups() const { return variant_selections_.size(); }
   int VariantSelection(int group) const { return variant_selections_[group]; }
 
+  void AddPropIfNotExist(const std::string& attachpoint, const ActorTemplate& actor_template);
+
+  void ClearAttachPoint(const std::string& attachpoint) {
+    props_[attachpoint].clear();
+  }
+
+  std::map<std::string, std::vector<std::unique_ptr<Actor>>>* Props() {
+    return &props_;
+  }
+
+  Actor(const Actor& other) = delete;
+  Actor(Actor&& actor) = default;
+
   virtual ~Actor() {}
 
  private:
-  Actor(ActorTemplate* actor_template, bool randomize = true);
+  Actor(const ActorTemplate* actor_template);
 
   // Variant selection for each group.
   std::vector<int> variant_selections_;
 
-  ActorTemplate* template_;
+  std::map<std::string, std::vector<std::unique_ptr<Actor>>> props_;
+
+  const ActorTemplate* template_;
 
   glm::vec3 position_;
   float scale_;
@@ -60,17 +77,19 @@ class ActorTemplate {
 
   int NumGroups() const { return actor_data_->groups()->size(); }
   int NumVariants(int group) const { return actor_data_->groups()->Get(group)->variants()->size(); }
-  float VariantFrequency(int group, int variant) { return actor_data_->groups()->Get(group)->variants()->Get(variant)->frequency(); }
+  float VariantFrequency(int group, int variant) const {
+    return actor_data_->groups()->Get(group)->variants()->Get(variant)->frequency();
+  }
 
   // Render a variant from a group. Props are ignored.
-  void Render(Renderable::RenderContext* context, const Actor& actor, const glm::mat4& model);
+  void Render(Renderable::RenderContext* context, Actor* actor, const glm::mat4& model) const;
 
-  std::mt19937& Rng() { return *rng_; }
+  std::mt19937& Rng() const { return *rng_; }
 
  private:
   ActorTemplate(const std::string& actor_path, std::mt19937* rng);
 
-  std::mt19937* rng_;
+  mutable std::mt19937* rng_;
   std::vector<uint8_t> actor_raw_buffer_;
   const data::Actor* actor_data_;
 };

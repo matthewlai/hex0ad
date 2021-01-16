@@ -2,19 +2,19 @@
 #define RESOURCES_H
 
 static constexpr const char* kTestActorPaths[] = {
-    // "structures/britons/civic_centre",
+    "structures/britons/civic_centre",
 
-    // "structures/mauryas/fortress",
-    // "structures/britons/fortress",
-    // "structures/persians/fortress",
-    // "structures/romans/fortress",
-    // "structures/spartans/fortress",
+    "structures/mauryas/fortress",
+    "structures/britons/fortress",
+    "structures/persians/fortress",
+    "structures/romans/fortress",
+    "structures/spartans/fortress",
 
-    // "structures/persians/stable",
-    // "structures/persians/stable_elephant",
-    // "units/athenians/hero_infantry_javelinist_iphicrates",
-    // "units/romans/hero_cavalry_swordsman_maximus_r",
-    // "units/romans/cavalry_javelinist_a_m",
+    "structures/persians/stable",
+    "structures/persians/stable_elephant",
+    "units/athenians/hero_infantry_javelinist_iphicrates",
+    "units/romans/hero_cavalry_swordsman_maximus_r",
+    "units/romans/cavalry_javelinist_a_m",
     "units/spartans/female_citizen",
     };
 

@@ -151,7 +151,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   return it->second;
 }
 
-Actor::Actor(ActorTemplate* actor_template, bool randomize)
+Actor::Actor(const ActorTemplate* actor_template)
     : template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
   for (int group = 0; group < template_->NumGroups(); ++group) {
     std::vector<float> probability_densities;
@@ -161,7 +161,7 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize)
 
     std::discrete_distribution dist(probability_densities.begin(), probability_densities.end());
 
-    variant_selections_.push_back(randomize ? dist(actor_template->Rng()) : 0);
+    variant_selections_.push_back(dist(actor_template->Rng()));
   }
 }
 
@@ -175,8 +175,17 @@ void Actor::Render(RenderContext* context) {
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
   if (context->pass == RenderPass::kGeometry || context->pass == RenderPass::kShadow) {
-    template_->Render(context, *this, model);
+    template_->Render(context, this, model);
   }
+}
+
+void Actor::AddPropIfNotExist(const std::string& attachpoint, const ActorTemplate& actor_template) {
+  for (const auto& prop : props_[attachpoint]) {
+    if (prop->template_->Name() == actor_template.Name()) {
+      return;
+    }
+  }
+  props_[attachpoint].push_back(std::unique_ptr<Actor>(new Actor(&actor_template)));
 }
 
 ActorTemplate::ActorTemplate(const std::string& actor_path, std::mt19937* rng)
@@ -187,7 +196,7 @@ ActorTemplate::ActorTemplate(const std::string& actor_path, std::mt19937* rng)
   LOG_INFO("Actor loaded: %", actor_data_->path()->str());
 }
 
-void ActorTemplate::Render(Renderable::RenderContext* context, const Actor& actor, const glm::mat4& model) {
+void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, const glm::mat4& model) const {
   std::string mesh_path;
   TextureSet textures;
   std::map<std::string, std::vector<ActorTemplate*>> props;
@@ -196,8 +205,8 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor& acto
 
   bool shadow_pass = context->pass == RenderPass::kShadow;
 
-  for (int group = 0; group < actor.NumGroups(); ++group) {
-    const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(actor.VariantSelection(group));
+  for (int group = 0; group < actor->NumGroups(); ++group) {
+    const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(actor->VariantSelection(group));
 
     if (variant->mesh_path() && !variant->mesh_path()->str().empty()) {
       mesh_path = variant->mesh_path()->str();
@@ -210,12 +219,12 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor& acto
 
     for (const auto* prop : *variant->props()) {
       std::string attachpoint = prop->attachpoint()->str();
-      std::string actor = prop->actor()->str();
-      if (actor.empty()) {
+      std::string prop_actor = prop->actor()->str();
+      if (prop_actor.empty()) {
         // We need to clear everything currently attached.
-        props.erase(attachpoint);
+        actor->ClearAttachPoint(attachpoint);
       } else {
-        props[attachpoint].push_back(&GetTemplate(actor));
+        actor->AddPropIfNotExist(attachpoint, GetTemplate(prop_actor));
       }
     }
 
@@ -249,15 +258,12 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor& acto
   RenderMesh(mesh_path, textures, context->projection * context->view,
              model * attachpoints["main_mesh"], maybe_alpha_colour, context);
 
-  for (auto& [point, actor_templates] : props) {
-    for (auto& actor_template : actor_templates) {
-      auto it = attachpoints.find(point);
-
-      if (it != attachpoints.end()) {
+  for (auto& [point, prop_actors] : *(actor->Props())) {
+    auto it = attachpoints.find(point);
+    if (it != attachpoints.end()) {
+      for (auto& prop_actor : prop_actors) {
         glm::mat4 prop_model = model * it->second;
-        // TODO: actually make ActorConfig recursive.
-        Actor actor(actor_template, /*randomize=*/false);
-        actor.Render(context, prop_model);
+        prop_actor->Render(context, prop_model);
       }
     }
   }
