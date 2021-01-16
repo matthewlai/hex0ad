@@ -574,12 +574,21 @@ void ParseMesh(const std::string& mesh_path) {
   if (done_tracker.ShouldSkip(mesh_path)) {
     return;
   }
+
   std::string full_path = std::string(kInputPrefix) + kMeshPathPrefix + mesh_path;
   flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
   LOG_INFO("Parsing mesh % at %", mesh_path, full_path);
   std::string source = ReadWholeFileString(full_path);
   ColladaDocument cdoc;
-  cdoc.LoadFromText(source);
+
+  // Unfortunately we have to serialize this because FCollada doesn't seem to be thread-safe. But it seems
+  // to be fine as long as we guard the loading part? Not sure. We can enlarge the critical section if
+  // we get more crashes.
+  {
+    static std::mutex mutex;
+    std::lock_guard<std::mutex> lock(mutex);
+    cdoc.LoadFromText(source);
+  }
 
   FCDSceneNode* root = cdoc.Doc()->GetVisualSceneRoot();
   if (!root) {
