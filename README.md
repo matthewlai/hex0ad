@@ -48,15 +48,16 @@ Tile-based strategy game using 0ad assets
 
 ### macOS
 * Install Homebrew (https://brew.sh/)
+	* Follow instructions on https://brew.sh
 * Install dependencies
 	* `brew install sdl2 sdl2_ttf flatbuffers libxml2 cmake pkg-config`
 * Set up libxml2 for pkg-config to find
-	* `brew info libxml2` to see instructions (set PKG_CONFIG_PATH in $HOME/.bash_profile)
+	* `brew info libxml2` to see instructions (set PKG_CONFIG_PATH in $HOME/.bash_profile or $HOME/.zshrc)
 * FCollada for converting assets (https://github.com/matthewlai/fcollada)
 	* `git clone https://github.com/matthewlai/fcollada.git`
 	* `cd fcollada`
 	* `cmake .`
-	* Build with `make -j 24 && make install` (or as appropriate for how many CPU cores you have)
+	* Build with `make -j 6 && make install` (or as appropriate for how many CPU cores you have)
 
 ## Download and convert 0ad Assets (All Platforms)
 * Download https://0adassets.s3-us-west-2.amazonaws.com/assets.7z, and extract into 0ad_assets, so you should end up with:
