@@ -1,6 +1,7 @@
 #ifndef SHADERS_H
 #define SHADERS_H
 
+#include <unordered_map>
 #include <stdexcept>
 #include <string>
 
@@ -28,10 +29,10 @@ class ShaderProgram {
   void SetUniform(const NameLiteral& name, GLint x) {
     GLint location = GetUniformLocation(name);
     if (location != -1) {
-      GLint *cached = uniform_cache_1i_.Find(name);
-      if (!cached || *cached != x) {
+      auto it = uniform_cache_1i_.find(name);
+      if (it == uniform_cache_1i_.end() || it->second != x) {
         glUniform1i(location, x);
-        uniform_cache_1i_.InsertOrReplace(name, x);
+        uniform_cache_1i_.insert_or_assign(name, x);
       }
     }
   }
@@ -97,8 +98,8 @@ class ShaderProgram {
   GLuint fragment_shader_;
   GLuint program_;
 
-  LinearCache<NameLiteral, GLint> uniform_locations_cache_;
-  LinearCache<NameLiteral, GLint> uniform_cache_1i_;
+  std::unordered_map<NameLiteral, GLint, NameLiteralHash> uniform_locations_cache_;
+  std::unordered_map<NameLiteral, GLint, NameLiteralHash> uniform_cache_1i_;
 };
 
 // Get a pointer to a ShaderProgram built from the specified

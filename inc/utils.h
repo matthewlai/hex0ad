@@ -74,25 +74,22 @@ inline int64_t Rand(int64_t a, int64_t b) {
   return dist(rng);
 }
 
-// We use pointer lookup for caches where we know the name will
-// (should) always be a literal. We define a literal wrapper
-// type to ensure that.
+// This is a wrapper around const char* so we can specialize std::hash for it.
 class NameLiteral {
  public:
   constexpr NameLiteral(const char* s) : s_(s) {}
   constexpr const char* Ptr() const { return s_; };
+
   constexpr bool operator==(const NameLiteral& other) const {
-    // Pointer comparison is intentional. This is what makes
-    // it fast.
-    return s_ == other.s_;
+    if (s_ == other.s_) {
+      return true;
+    } else {
+      return strcmp(s_, other.s_) == 0;
+    }
   }
 
   constexpr bool operator!=(const NameLiteral& other) const {
     return !(*this == other);
-  }
-
-  constexpr bool operator<(const NameLiteral& other) const {
-    return s_ < other.s_;
   }
 
  private:
@@ -109,50 +106,20 @@ constexpr NameLiteral operator""_name(const char *str, std::size_t len) {
   return NameLiteral(str);
 }
 
-using namespace std::string_literals;
-
-// Linear cache for very small tables (eg. uniform locations) where
-// either BST or hashing would be slower, and we want good cache
-// locality. It's insert-only, and only lookup speed is prioritized.
-template <typename K, typename V>
-class LinearCache {
- public:
-  // Warn if the table gets to this big.
-  // This is around when we should be switching to binary search.
-  // https://dirtyhandscoding.wordpress.com/2017/08/25/performance-comparison-linear-search-vs-binary-search/
-  const static std::size_t kSizeToWarn = 512;
-
-  void InsertOrReplace(const K& k, const V& v) {
-    V* existing_ptr = Find(k);
-
-    if (existing_ptr != nullptr) {
-      *existing_ptr = v;
-    } else {
-      keys_.push_back(k);
-      values_.push_back(v);
+struct NameLiteralHash {
+  std::size_t operator()(NameLiteral const& s) const noexcept {
+    // This is the djb2 algorithm: http://www.cse.yorku.ca/~oz/hash.html
+    std::size_t hash = 5381;
+    int c;
+    const char* str = s.Ptr();
+    while ((c = *str++)) {
+      hash = hash * 33 + c;
     }
-
-    if (keys_.size() > kSizeToWarn) {
-      LOG_WARN("LinearCache is now at size %. Maybe switch to BST?",
-               keys_.size());
-    }
+    return hash;
   }
-
-  // Lookup. Returns pointer to found element or nullptr.
-  V* Find(const K& k) {
-    for (std::size_t i = 0; i < keys_.size(); ++i) {
-      if (k == keys_[i]) {
-        return &values_[i];
-      }
-    }
-    return nullptr;
-  }
-
- private:
-  // Separate keys and value vectors for cache locality.
-  std::vector<K> keys_;
-  std::vector<V> values_;
 };
+
+using namespace std::string_literals;
 
 #ifdef HAVE_GLEW
 // For OpenGL debugging. This is adapted from https://learnopengl.com/In-Practice/Debugging
