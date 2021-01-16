@@ -26,6 +26,8 @@ class ActorTemplate;
 // actor instantiated from it.
 class Actor : public Renderable {
  public:
+  Actor(const ActorTemplate* actor_template);
+
   void Render(RenderContext* context) override;
   void Render(RenderContext* context, const glm::mat4& model);
 
@@ -51,8 +53,6 @@ class Actor : public Renderable {
   virtual ~Actor() {}
 
  private:
-  Actor(const ActorTemplate* actor_template);
-
   // Variant selection for each group.
   std::vector<int> variant_selections_;
 
@@ -62,8 +62,6 @@ class Actor : public Renderable {
 
   glm::vec3 position_;
   float scale_;
-
-  friend class ActorTemplate;
 };
 
 // Corresponds to an actor .fbs file, which corresponds to an actor XML.
