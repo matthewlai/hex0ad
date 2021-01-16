@@ -1,0 +1,37 @@
+namespace data;
+
+table SkeletonMapping {
+  // How do we identify the skeleton mappnig (aka skeleton in 0ad) to use? at the moment
+  // only exact match of root name is implemented.
+  root_name:string;
+
+  // Each bone in the skeleton need to match to the index of a canonical bone.
+  bone_names:[string];
+  canonical_ids:[int32];
+
+  // Same as above, except each canonical id can only appear once. All later bones
+  // that map to the same canonical bone will get -1.
+  unique_canonical_ids:[int32];
+}
+
+// This table corresponds to a skeleton XML file that defines an armature. It's
+// stored as a tree, but the hierarchy isn't important except for the fact that
+// alternative skeletons with no target inherit the target from their parents.
+// We just resolve that in the pre-processing, and store flattened bone lists.
+//
+// See: https://wildfiregames.com/forum/topic/15552-animation-pipeline/?do=findComment&comment=232725
+table Skeleton {
+  path:string;
+
+  // ID of the standard skeleton. Targets of non-standard skeletons aren't stored, because
+  // we verify that they match the ID of the standard skeleton at preprocess time.
+	id:string;
+
+  // Bones in the standard skeleton.
+  canonical_bones:[string];
+
+  // Mappings are caled "skeleton" in 0ad (as opposed to "standard skeleton").
+  mappings:[SkeletonMapping];
+}
+
+root_type Skeleton;

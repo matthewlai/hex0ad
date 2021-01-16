@@ -185,9 +185,9 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
 }
 
 GLint ShaderProgram::GetUniformLocation(const NameLiteral& name) {
-  GLint* loc_ptr = uniform_locations_cache_.Find(name);
+  auto it = uniform_locations_cache_.find(name);
 
-  if (!loc_ptr) {
+  if (it == uniform_locations_cache_.end()) {
     auto loc = glGetUniformLocation(program_, name.Ptr());
 
     constexpr bool kCheckShaderActive = false;
@@ -209,10 +209,10 @@ GLint ShaderProgram::GetUniformLocation(const NameLiteral& name) {
       throw std::runtime_error("GetUniformLocation failed.");
     }
 
-    uniform_locations_cache_.InsertOrReplace(name, loc);
+    uniform_locations_cache_.insert({name, loc});
     return loc;
   } else {
-    return *loc_ptr;
+    return it->second;
   }
 }
 

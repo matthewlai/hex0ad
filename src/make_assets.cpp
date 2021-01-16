@@ -20,6 +20,7 @@
 #include "actor_generated.h"
 #include "mesh_generated.h"
 #include "resources.h"
+#include "skeleton_generated.h"
 #include "terrain_generated.h"
 #include "texture_generated.h"
 
@@ -571,6 +572,16 @@ void WriteImageOpt(const std::string& output_path, std::vector<uint8_t>* uncompr
   liq_attr_destroy(handle);
 }
 
+std::string GetTextContent(XMLHandle handle) {
+  for (const XMLNode* child = handle.FirstChild().ToNode(); child != nullptr; child = child->NextSibling()) {
+    const XMLText* text = child->ToText();
+    if (text) {
+      return text->Value();
+    }
+  }
+  return "";
+}
+
 }
 
 // See https://github.com/0ad/0ad/blob/master/source/collada/PMDConvert.cpp
@@ -847,14 +858,8 @@ void MakeActor(const std::string& actor_path) {
 
   std::vector<XMLHandle> materials = GetAllChildrenElements(root, "material");
   if (!materials.empty()) {
-    for (const XMLNode* child = materials[0].FirstChild().ToNode(); child != nullptr; child = child->NextSibling()) {
-      const XMLText* text = child->ToText();
-      if (text) {
-        LOG_DEBUG("Material is: %", text->Value());
-        material = text->Value();
-        break;
-      }
-    }
+    material = GetTextContent(materials[0]);
+    LOG_DEBUG("Material is: %", material);
   }
 
   LOG_DEBUG("% groups found", xml_groups.size());
@@ -1011,6 +1016,151 @@ void MakeTerrain(const std::string& terrain_path) {
               builder.GetBufferPointer(), builder.GetSize());
 }
 
+void GetAllStandardSkeletonBones(XMLHandle node, std::vector<std::string>* bones) {
+  auto children = GetAllChildrenElements(node, "bone");
+  for (auto& child : children) {
+    bones->push_back(child.ToElement()->Attribute("name"));
+    GetAllStandardSkeletonBones(child, bones);
+  }
+}
+
+// Here we try to figure out a mapping from skeleton bones to canonical (standard skeleton) bones, with
+// some restrictions -
+// 1. We only use each target bone once for the unique set, and nodes higher up the tree have priority.
+// 2. If a bone has no target, it inherits target from the parent.
+// See logic here: https://github.com/0ad/0ad/blob/358825ebbfa071df9590b523951989b5e5f45e3c/source/collada/StdSkeletons.cpp#L101
+void GetAllSkeletonBoneMappings(XMLHandle node, const std::string parent_target, const std::map<std::string, int>& canonical_bones,
+                                std::map<std::string, int>* mappings, std::map<std::string, int>* unique_mappings,
+                                std::set<int>* unused_target_bones) {
+  auto children = GetAllChildrenElements(node, "bone");
+  for (auto& child : children) {
+    std::string name = child.ToElement()->Attribute("name");
+    std::string target = parent_target;
+    auto targets = GetAllChildrenElements(child, "target");
+    if (!targets.empty()) {
+      target = GetTextContent(targets[0]);
+    }
+
+    auto it = canonical_bones.find(name);
+    if (it == canonical_bones.end()) {
+      LOG_ERROR("Bone % has target %, which is not in the canonical set", name, target);
+      continue;
+    }
+
+    int canonical_id = it->second;
+    (*mappings)[name] = canonical_id;
+
+    if (unused_target_bones->find(canonical_id) != unused_target_bones->end()) {
+      (*unique_mappings)[name] = canonical_id;
+      unused_target_bones->erase(canonical_id);
+    } else {
+      // This target bone has already been used.
+      (*unique_mappings)[name] = -1;
+    }
+
+    GetAllSkeletonBoneMappings(child, target, canonical_bones, mappings, unique_mappings, unused_target_bones);
+  }
+}
+
+void MakeSkeleton(const std::string& skeleton_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(skeleton_path)) {
+    return;
+  }
+  std::string full_path = std::string(kInputPrefix) + kSkeletonPathPrefix + skeleton_path + ".xml";
+  flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
+  LOG_INFO("Parsing skeleton % at %", skeleton_path, full_path);
+  TinyXMLDocument xml_doc;
+  if (xml_doc.LoadFile(full_path.c_str()) != 0) {
+    throw std::runtime_error(std::string("Failed to open: ") + full_path);
+  }
+
+  XMLHandle root = XMLHandle(xml_doc.FirstChildElement("skeletons"));
+
+  auto standard_skeletons = GetAllChildrenElements(root, "standard_skeleton");
+  auto skeletons = GetAllChildrenElements(root, "skeleton");
+
+  if (standard_skeletons.size() != 1) {
+    LOG_ERROR("Found % standard_skeleton (expecting 1)", standard_skeletons.size());
+    return;
+  }
+
+  if (skeletons.empty()) {
+    LOG_ERROR("No non-standard skeleton found (expecting >=1)", skeletons.size());
+    return;
+  }
+
+  std::string canonical_id = standard_skeletons[0].ToElement()->Attribute("id");
+
+  std::vector<std::string> standard_skeleton_bones;
+  GetAllStandardSkeletonBones(standard_skeletons[0], &standard_skeleton_bones);
+
+  std::vector<flatbuffers::Offset<data::SkeletonMapping>> skeleton_mapping_offsets;
+  for (auto& skeleton : skeletons) {
+    std::string skeleton_target = skeleton.ToElement()->Attribute("target");
+    if (skeleton_target != canonical_id) {
+      LOG_ERROR("Non-standard skeleton has target % (expecting %)", skeleton_target, canonical_id);
+      return;
+    }
+
+    auto identifiers = GetAllChildrenElements(skeleton, "identifier");
+    if (identifiers.size() != 1) {
+      LOG_ERROR("Found % identifiers (expecting 1)", identifiers.size());
+      return;
+    }
+
+    auto roots = GetAllChildrenElements(identifiers[0], "root");
+    if (roots.size() != 1) {
+      LOG_ERROR("Found % roots (expecting 1)", roots.size());
+      return;
+    }
+
+    std::string root_name = GetTextContent(roots[0]);
+
+    std::map<std::string, int> canonical_bones;
+    std::map<std::string, int> mappings;
+    std::map<std::string, int> unique_mappings;
+    std::set<int> unused_target_bones;
+
+    for (int i = 0; i < static_cast<int>(standard_skeleton_bones.size()); ++i) {
+      canonical_bones[standard_skeleton_bones[i]] = i;
+      unused_target_bones.insert(i);
+    }
+
+    GetAllSkeletonBoneMappings(skeleton, ""s, canonical_bones, &mappings, &unique_mappings, &unused_target_bones);
+
+    std::vector<std::string> bone_names;
+    std::vector<int> mapping_ids;
+    std::vector<int> mapping_unique_ids;
+
+    for (const auto& mapping : mappings) {
+      LOG_DEBUG("% -> % (%)", mapping.first, mapping.second, standard_skeleton_bones[mapping.second]);
+      bone_names.push_back(mapping.first);
+      mapping_ids.push_back(mapping.second);
+      mapping_unique_ids.push_back(unique_mappings[mapping.first]);
+    }
+
+    skeleton_mapping_offsets.push_back(data::CreateSkeletonMapping(
+        builder,
+        /*root_name=*/builder.CreateString(root_name),
+        /*bone_names=*/builder.CreateVectorOfStrings(bone_names),
+        /*canonical_ids=*/builder.CreateVector(mapping_ids),
+        /*unique_canonical_ids=*/builder.CreateVector(mapping_unique_ids)
+    ));
+  }
+
+  auto skeleton = data::CreateSkeleton(
+      builder,
+      /*path=*/builder.CreateString(RemoveExtension(skeleton_path)),
+      /*id=*/builder.CreateString(canonical_id),
+      /*canonical_bones=*/builder.CreateVectorOfStrings(standard_skeleton_bones),
+      /*mappings=*/builder.CreateVector(skeleton_mapping_offsets)
+      );
+  builder.Finish(skeleton);
+  WriteToFile(std::string(kOutputPrefix) + kSkeletonPathPrefix + RemoveExtension(skeleton_path) + ".fb",
+              builder.GetBufferPointer(), builder.GetSize());
+}
+
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
   auto start_time = GetTimeUs();
@@ -1033,12 +1183,15 @@ int main(int /*argc*/, char** /*argv*/) {
     g_parser_pool->Push([path]() { MakeTerrain(path); });
   }
 
-  std::vector<std::thread> actor_workers;
   for (const auto& path : kTestActorPaths) {
     // We only parallelize in the unit of root actors (not props) so
     // we know when all pushes have happened and we can tell the
     // threadpool to exit.
     g_parser_pool->Push([path]() { MakeActor(path); });
+  }
+
+  for (const auto& path : kSkeletonPaths) {
+    g_parser_pool->Push([path]() { MakeSkeleton(path); });
   }
 
   // We have to wait for the parser pool to finish first so we know we won't be adding
