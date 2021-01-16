@@ -74,15 +74,29 @@ inline int64_t Rand(int64_t a, int64_t b) {
   return dist(rng);
 }
 
-// This is a wrapper around const char* so we can specialize std::hash for it.
+// This is the djb2 algorithm: http://www.cse.yorku.ca/~oz/hash.html
+constexpr std::size_t Djb2(const char* s) {
+  std::size_t hash = 5381;
+  int c = 0;
+  const char* str = s;
+  while ((c = *str++)) {
+    hash = hash * 33 + c;
+  }
+  return hash;
+}
+
+// This is a wrapper around const char* with hash.
 class NameLiteral {
  public:
-  constexpr NameLiteral(const char* s) : s_(s) {}
+  constexpr NameLiteral(const char* s) : s_(s), hash_(Djb2(s)) {}
+
   constexpr const char* Ptr() const { return s_; };
 
   constexpr bool operator==(const NameLiteral& other) const {
     if (s_ == other.s_) {
       return true;
+    } else if (hash_ != other.hash_) {
+      return false;
     } else {
       return strcmp(s_, other.s_) == 0;
     }
@@ -92,8 +106,11 @@ class NameLiteral {
     return !(*this == other);
   }
 
+  constexpr std::size_t Hash() const { return hash_; }
+
  private:
   const char* s_;
+  std::size_t hash_;
 };
 
 inline std::ostream& operator<<(std::ostream& os, const NameLiteral& name) {
@@ -108,14 +125,7 @@ constexpr NameLiteral operator""_name(const char *str, std::size_t len) {
 
 struct NameLiteralHash {
   std::size_t operator()(NameLiteral const& s) const noexcept {
-    // This is the djb2 algorithm: http://www.cse.yorku.ca/~oz/hash.html
-    std::size_t hash = 5381;
-    int c;
-    const char* str = s.Ptr();
-    while ((c = *str++)) {
-      hash = hash * 33 + c;
-    }
-    return hash;
+    return s.Hash();
   }
 };
 
