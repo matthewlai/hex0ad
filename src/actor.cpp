@@ -151,7 +151,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   return it->second;
 }
 
-Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
+Actor::Actor(ActorTemplate* actor_template, bool randomize)
+    : template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
   for (int group = 0; group < template_->NumGroups(); ++group) {
     std::vector<float> probability_densities;
     for (int variant = 0; variant < template_->NumVariants(group); ++variant) {
@@ -160,9 +161,7 @@ Actor::Actor(ActorTemplate* actor_template, bool randomize) : template_(actor_te
 
     std::discrete_distribution dist(probability_densities.begin(), probability_densities.end());
 
-    GroupConfig group_config;
-    group_config.variant_selection = randomize ? dist(actor_template->Rng()) : 0;
-    actor_config_.push_back(std::move(group_config));
+    variant_selections_.push_back(randomize ? dist(actor_template->Rng()) : 0);
   }
 }
 
@@ -170,12 +169,13 @@ void Actor::Render(RenderContext* context) {
   // Models are supposed to be using 2m units, so scaling by 0.5 here give us 1m units to match rest of the game.
   // https://trac.wildfiregames.com/wiki/ArtScaleAndProportions
   Render(context,
-         glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) * glm::scale(glm::vec3(0.5f, 0.5f, 0.5f)));
+         glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) *
+         glm::scale(glm::vec3(0.5f, 0.5f, 0.5f)));
 }
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
   if (context->pass == RenderPass::kGeometry || context->pass == RenderPass::kShadow) {
-    template_->Render(context, actor_config_, model);
+    template_->Render(context, *this, model);
   }
 }
 
@@ -187,7 +187,7 @@ ActorTemplate::ActorTemplate(const std::string& actor_path, std::mt19937* rng)
   LOG_INFO("Actor loaded: %", actor_data_->path()->str());
 }
 
-void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::ActorConfig& config, const glm::mat4& model) {
+void ActorTemplate::Render(Renderable::RenderContext* context, const Actor& actor, const glm::mat4& model) {
   std::string mesh_path;
   TextureSet textures;
   std::map<std::string, std::vector<ActorTemplate*>> props;
@@ -196,8 +196,8 @@ void ActorTemplate::Render(Renderable::RenderContext* context, const Actor::Acto
 
   bool shadow_pass = context->pass == RenderPass::kShadow;
 
-  for (std::size_t group = 0; group < config.size(); ++group) {
-    const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(config[group].variant_selection);
+  for (int group = 0; group < actor.NumGroups(); ++group) {
+    const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(actor.VariantSelection(group));
 
     if (variant->mesh_path() && !variant->mesh_path()->str().empty()) {
       mesh_path = variant->mesh_path()->str();

@@ -24,29 +24,24 @@ class ActorTemplate;
 // actor instantiated from it.
 class Actor : public Renderable {
  public:
-  // This struct describes how a group should be rendered. That includes a variant
-  // selection and potentially additional Actors (which have their own list of group
-  // configs) in case the variant includes props (actors attached to the actor).
-  struct GroupConfig {
-    int variant_selection;
-    std::vector<std::pair<std::string, Actor>> props;
-  };
-
-  using ActorConfig = std::vector<GroupConfig>;
-
   void Render(RenderContext* context) override;
   void Render(RenderContext* context, const glm::mat4& model);
 
   void SetPosition(const glm::vec3& new_position) { position_ = new_position; }
   void SetScale(float new_scale) { scale_ = new_scale; }
 
+  int NumGroups() const { return variant_selections_.size(); }
+  int VariantSelection(int group) const { return variant_selections_[group]; }
+
   virtual ~Actor() {}
 
  private:
   Actor(ActorTemplate* actor_template, bool randomize = true);
 
+  // Variant selection for each group.
+  std::vector<int> variant_selections_;
+
   ActorTemplate* template_;
-  ActorConfig actor_config_;
 
   glm::vec3 position_;
   float scale_;
@@ -68,7 +63,7 @@ class ActorTemplate {
   float VariantFrequency(int group, int variant) { return actor_data_->groups()->Get(group)->variants()->Get(variant)->frequency(); }
 
   // Render a variant from a group. Props are ignored.
-  void Render(Renderable::RenderContext* context, const Actor::ActorConfig& config, const glm::mat4& model);
+  void Render(Renderable::RenderContext* context, const Actor& actor, const glm::mat4& model);
 
   std::mt19937& Rng() { return *rng_; }
 
