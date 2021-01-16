@@ -80,7 +80,7 @@ ifeq ($(EM_BUILD), 1)
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -Wno-psabi -g -O3
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
@@ -119,6 +119,7 @@ else
 		endif
 
 		ifeq ($(UNAME_S),Linux)
+			CXXFLAGS += -Wno-psabi
 			LDFLAGS += -ldl -pthread
 		endif
 	endif
