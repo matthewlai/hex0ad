@@ -261,7 +261,6 @@ void DeInitSDL() {
 int main(int /*argc*/, char** /*argv*/) {
   logger.LogToStdErrLevel(Logger::eLevel::WARN);
   logger.LogToStdOutLevel(Logger::eLevel::INFO);
-
   #ifdef __EMSCRIPTEN__
   int have_webgl2 = emscripten_run_script_int(R""(
     try { gl = canvas.getContext("webgl2"); } catch (x) { gl = null; } gl != null;)"");

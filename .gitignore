@@ -24,3 +24,4 @@ vs_proj/.vs/*
 assets/art
 hex0ad
 make_assets
+.vscode/*

@@ -1,7 +1,7 @@
 # Build
-# Mac/Linux: make
-# Emscripten: emmake make
-# Emscripten build and run in browser: emmake make run_web
+# Mac/Linux: OPT=-O3 make
+# Emscripten: OPT=-O3 emmake make
+# Emscripten build and run in browser: OPT=-O3 emmake make run_web
 
 # Defaults.
 ifndef CXX
@@ -12,6 +12,10 @@ ifeq ($(V),0)
 	Q = @
 else
 	Q =
+endif
+
+ifndef OPT
+	OPT=-O1
 endif
 
 ifeq ($(basename $(notdir $(CXX))), em++)
@@ -73,14 +77,14 @@ CXXFLAGS_DEP = -std=gnu++17
 # Flags.
 ifeq ($(EM_BUILD), 1)
 	PORTS =  -s USE_SDL=2 -s USE_SDL_TTF=2
-	CXXFLAGS = $(INCLUDES) -std=gnu++17 $(PORTS) -O3
+	CXXFLAGS = $(INCLUDES) -std=gnu++17 $(PORTS) $(OPT)
 	LDFLAGS =  $(PORTS) -s WASM=1 -s ALLOW_MEMORY_GROWTH=1
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g -O3
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g $(OPT)
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)

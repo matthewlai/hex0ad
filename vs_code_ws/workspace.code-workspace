@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		}
+	],
+	"settings": {
+		"editor.tabSize": 2,
+		"C_Cpp.autocompleteAddParentheses": true,
+		"C_Cpp.clang_format_fallbackStyle": "Google",
+		"C_Cpp.default.cppStandard": "c++20"
+	}
+}

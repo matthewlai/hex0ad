@@ -43,7 +43,9 @@
 #include <FUtils/FUtils.h>
 #include <FCDocument/FCDAsset.h>
 #include <FCDocument/FCDController.h>
+#include <FCDocument/FCDControllerInstance.h>
 #include <FCDocument/FCDSceneNode.h>
+#include <FCDocument/FCDSkinController.h>
 #include <FCDocument/FCDocument.h>
 #include <FCDocument/FCDGeometry.h>
 #include <FCDocument/FCDGeometryMesh.h>
@@ -414,8 +416,8 @@ std::vector<float> GetData(FCDGeometryPolygonsInput* input,
 }
 
 struct VertexData {
-  // 3x position, 3x normal, 3x tangent, 2x UV, 2x ambient occlusion UV.
-  float data[13];
+  // 3x position, 3x normal, 3x tangent, 2x UV, 2x ambient occlusion UV, 4x bone ids, 4x bone weights.
+  float data[21];
 
   // Convenience functions.
   VertexData() { std::fill(std::begin(data), std::end(data), 0.0f); }
@@ -424,6 +426,8 @@ struct VertexData {
   float* Tangent() { return &data[6]; }
   float* UV0() { return &data[9]; }
   float* UV1() { return &data[11]; }
+  float* BoneId(int i) { return &data[13 + i]; }
+  float* BoneWeight(int i) { return &data[17 + i]; }
 
   bool operator<(const VertexData& other) const {
     return std::lexicographical_compare(std::begin(data), std::end(data),
@@ -444,6 +448,8 @@ struct VertexData {
   void SetTangent(float* x) { std::copy(x, x + 3, Tangent()); }
   void SetUV0(float* x) { std::copy(x, x + 2, UV0()); }
   void SetUV1(float* x) { std::copy(x, x + 2, UV1()); }
+  void SetBoneId(int i, float id) { *(BoneId(i)) = id; }
+  void SetBoneWeight(int i, float weight) { *(BoneWeight(i)) = weight; }
 };
 
 struct IndexedVertexData {
@@ -481,6 +487,90 @@ IndexedVertexData Reindex(std::vector<VertexData>&& vds) {
   }
 
   return ret;
+}
+
+// Reduce number of influences on each joint to kMaxSkinInfluences.
+// See https://github.com/0ad/0ad/blob/c7d07d3979f969b969211a5e5748fa775f6768a7/source/collada/CommonConvert.cpp#L303
+// We don't drop weights less than min weight because we don't want to branch in the shader anyways.
+void ReduceInfluences(FCDSkinController* skin) {
+  // For each vertex with influences
+  for (std::size_t influence = 0; influence < skin->GetInfluenceCount(); ++influence) {
+    FCDSkinControllerVertex* influences = skin->GetVertexInfluence(influence);
+    std::vector<FCDJointWeightPair> new_weights;
+    for (std::size_t i = 0; i < influences->GetPairCount(); ++i) {
+      FCDJointWeightPair* weight = influences->GetPair(i);
+      // See if there is an existing weight with the same joint. Merge if so.
+      bool merged = false;
+      for (std::size_t j = 0; j < new_weights.size(); ++j) {
+        if (weight->jointIndex == new_weights[j].jointIndex) {
+          new_weights[j].weight += weight->weight;
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        new_weights.push_back(*weight);
+      }
+    }
+
+    // Sort influences on the vertex by weight, and drop extra ones.
+    std::sort(new_weights.begin(), new_weights.end(), [](const auto& a, const auto& b) {
+      return a.weight > b.weight;
+    });
+
+    if (new_weights.size() > kMaxSkinInfluences) {
+      new_weights.resize(kMaxSkinInfluences);
+    }
+
+    // Re-normalize.
+    float total_weight = std::accumulate(
+        new_weights.begin(), new_weights.end(), 0.0f,
+        [](float x, const auto& weight) { return x + weight.weight; });
+    if (total_weight > 0.0f) {
+      for (auto& weight : new_weights) {
+        weight.weight /= total_weight;
+      }
+    }
+
+    influences->SetPairCount(0);
+    for (const auto& weight : new_weights) {
+      influences->AddPair(weight.jointIndex, weight.weight);
+    }
+  }
+
+  skin->SetDirtyFlag();
+}
+
+std::vector<uint8_t> g_skeleton_buffers;
+std::vector<const data::Skeleton*> g_skeletons;
+
+struct SkeletonSelection {
+  const data::Skeleton* skeleton;
+  const data::SkeletonMapping* mapping;
+};
+
+std::optional<SkeletonSelection> FindSkeleton(const std::string& root_name) {
+  for (const auto* skeleton : g_skeletons) {
+    for (const auto* mapping : *(skeleton->mappings())) {
+      if (root_name == mapping->root_name()->str()) {
+        return SkeletonSelection{skeleton, mapping};
+      }
+    }
+  }
+  return std::nullopt;
+}
+
+// See https://github.com/0ad/0ad/blob/c7d07d3979f969b969211a5e5748fa775f6768a7/source/collada/CommonConvert.cpp#L381
+std::optional<SkeletonSelection> FindSkeleton(const FCDControllerInstance* controller_instance) {
+  const FCDSceneNode* joint = controller_instance->GetJoint(0);
+  while (joint) {
+    auto maybe_selection = FindSkeleton(joint->GetName().c_str());
+    if (maybe_selection) {
+      return maybe_selection;
+    }
+    joint = joint->GetParent();
+  }
+  return std::nullopt;
 }
 
 struct AttachmentPoint {
@@ -601,14 +691,42 @@ void ParseMesh(const std::string& mesh_path) {
 
   TransformedInstance t_instance = FindSingleInstance(root);
 
-  FCDGeometryPolygons* polys;
+  FCDGeometryPolygons* polys = nullptr;
+
+  FCDSkinController* skin = nullptr;
+
+  std::size_t joint_count = 0;
+
+  SkeletonSelection skeleton;
 
   if (t_instance.instance->GetEntity()->GetType() == FCDEntity::GEOMETRY) {
     LOG_DEBUG("Found static geometry");
     polys = PolysFromGeometry(static_cast<FCDGeometry*>(t_instance.instance->GetEntity()));
   } else if (t_instance.instance->GetEntity()->GetType() == FCDEntity::CONTROLLER) {
     LOG_DEBUG("Found skinned geometry");
+    FCDControllerInstance* controller_instance = static_cast<FCDControllerInstance*>(t_instance.instance);
     FCDController* controller = static_cast<FCDController*>(t_instance.instance->GetEntity());
+    skin = controller->GetSkinController();
+    if (!skin) {
+      LOG_ERROR("No skin controller on skinned geometry?");
+      return;
+    }
+    auto maybe_skeleton = FindSkeleton(controller_instance);
+
+    if (!maybe_skeleton) {
+      LOG_ERROR("No skeleton found");
+      return;
+    }
+
+    skeleton = *maybe_skeleton;
+
+    joint_count = std::min(skin->GetJointCount(), controller_instance->GetJointCount());
+    if (skin->GetJointCount() != controller_instance->GetJointCount()) {
+      LOG_ERROR("Skin and controller have different joint counts: % vs %",
+                skin->GetJointCount(), controller_instance->GetJointCount());
+      return;
+    }
+    ReduceInfluences(skin);
     polys = PolysFromGeometry(controller->GetBaseGeometry());
   } else {
     LOG_ERROR("Unknown geometry type: %", t_instance.instance->GetEntity()->GetType());
@@ -656,9 +774,18 @@ void ParseMesh(const std::string& mesh_path) {
     return;
   }
 
+  auto* position_source = polys->FindInput(FUDaeGeometryInput::POSITION)->GetSource();
+  auto num_vertex_positions = position_source->GetDataCount() / position_source->GetStride();
+  if (skin && skin->GetInfluenceCount() != num_vertex_positions) {
+    LOG_ERROR("Influence count (%) != (pre-indexed) vertices count (%)", skin->GetInfluenceCount(), num_vertex_positions);
+    return;
+  }
+
   LOG_DEBUG("% texture coordinate sets", texcoords_data.size());
 
   std::vector<VertexData> vertex_datas(num_vertices);
+
+  auto* positions_indices = polys->FindInput(FUDaeGeometryInput::POSITION)->GetIndices();
 
   for (uint64_t vertex = 0; vertex < num_vertices; ++vertex) {
     VertexData* vd = &vertex_datas[vertex];
@@ -669,6 +796,14 @@ void ParseMesh(const std::string& mesh_path) {
 
     if (texcoords_data.size() >= 2) {
       vd->SetUV1(&texcoords_data[1][vertex * 2]);
+    }
+
+    if (skin) {
+      FCDSkinControllerVertex* influences = skin->GetVertexInfluence(positions_indices[vertex]);
+      for (std::size_t i = 0; i < influences->GetPairCount(); ++i) {
+        vd->SetBoneId(i, influences->GetPair(i)->jointIndex);
+        vd->SetBoneWeight(i, influences->GetPair(i)->weight);
+      }
     }
   }
 
@@ -1173,6 +1308,14 @@ void MakeSkeleton(const std::string& skeleton_path) {
       /*mappings=*/builder.CreateVector(skeleton_mapping_offsets)
       );
   builder.Finish(skeleton);
+
+  // We have to save a copy of the buffer to back our list of skeletons, because
+  // the builder is about to go out of scope.
+  for (std::size_t i = 0; i < builder.GetSize(); ++i) {
+    g_skeleton_buffers.push_back(builder.GetBufferPointer()[i]);
+  }
+  g_skeletons.push_back(data::GetSkeleton(g_skeleton_buffers.data() + g_skeleton_buffers.size() - builder.GetSize()));
+  
   WriteToFile(std::string(kOutputPrefix) + kSkeletonPathPrefix + RemoveExtension(skeleton_path) + ".fb",
               builder.GetBufferPointer(), builder.GetSize());
 }
@@ -1185,6 +1328,12 @@ int main(int /*argc*/, char** /*argv*/) {
   unsigned threads_to_use = std::thread::hardware_concurrency();
   if (threads_to_use <= 1) {
     threads_to_use = 1;
+  }
+
+  // Do skeletons first in the main thread because they are fast and we need them for
+  // parsing meshes.
+  for (const auto& path : kSkeletonPaths) {
+    MakeSkeleton(path);
   }
 
   LOG_INFO("Using % threads per thread pool", threads_to_use);
@@ -1204,10 +1353,6 @@ int main(int /*argc*/, char** /*argv*/) {
     // we know when all pushes have happened and we can tell the
     // threadpool to exit.
     g_parser_pool->Push([path]() { MakeActor(path); });
-  }
-
-  for (const auto& path : kSkeletonPaths) {
-    g_parser_pool->Push([path]() { MakeSkeleton(path); });
   }
 
   // We have to wait for the parser pool to finish first so we know we won't be adding
