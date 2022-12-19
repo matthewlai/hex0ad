@@ -25,3 +25,5 @@ assets/art
 hex0ad
 make_assets
 .vscode/*
+fb/flatbuffers/pch
+fb/flatbuffers/*.h

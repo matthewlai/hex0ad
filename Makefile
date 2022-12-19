@@ -84,7 +84,7 @@ ifeq ($(EM_BUILD), 1)
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -march=native -ffast-math -Wno-unused-const-variable -g $(OPT)
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -ffast-math -Wno-unused-const-variable -g $(OPT)
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
@@ -152,7 +152,7 @@ bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o -o $@ $(LDFLAGS)
 	
 clean:
-	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES)
+	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES) $(FLATBUFFER_GENERATED_FILES) fb/flatbuffers/flatbuffers.h
 
 $(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) $(SHADERS) obj/src/hex0ad.o em_shell.html
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)

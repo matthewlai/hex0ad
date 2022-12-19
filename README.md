@@ -37,6 +37,7 @@ Tile-based strategy game using 0ad assets
 * Flatc compiler (https://github.com/google/flatbuffers/releases)
 	* Download the latest Windows binary
 	* Copy flatc.exe into [mingw-w64 bin directory]/bin
+	* Download the source package, and copy the content of include/flatbuffers to fb/flatbuffers
 * CMake (https://cmake.org/download/)
 	* Use the win64-x64 installer and add CMake to PATH
 * FCollada for converting assets (https://github.com/matthewlai/fcollada)
@@ -51,6 +52,8 @@ Tile-based strategy game using 0ad assets
 	* Follow instructions on https://brew.sh
 * Install dependencies
 	* `brew install sdl2 sdl2_ttf flatbuffers libxml2 cmake pkg-config`
+* Copy flatbuffers headers into the project
+	* `cp -r \`pkg-config --cflags-only-I flatbuffers|cut -c 3-\`/flatbuffers fb/`
 * Set up libxml2 for pkg-config to find
 	* `brew info libxml2` to see instructions (set PKG_CONFIG_PATH in $HOME/.bash_profile or $HOME/.zshrc)
 * FCollada for converting assets (https://github.com/matthewlai/fcollada)
