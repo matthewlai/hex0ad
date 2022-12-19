@@ -13,6 +13,7 @@ Tile-based strategy game using 0ad assets
 	* `cmake . -DFLATBUFFERS_BUILD_TESTS=OFF -DFLATBUFFERS_PACKAGE_DEBIAN=ON`
 	* `make -j6 package`
 	* `sudo dpkg -i flatbuffers_*.deb`
+	* `cp -r include/flatbuffers fb/`
 * FCollada for converting assets (https://github.com/matthewlai/fcollada)
 	* `git clone https://github.com/matthewlai/fcollada.git`
 	* `cd fcollada`
@@ -53,7 +54,7 @@ Tile-based strategy game using 0ad assets
 * Install dependencies
 	* `brew install sdl2 sdl2_ttf flatbuffers libxml2 cmake pkg-config`
 * Copy flatbuffers headers into the project
-	* `cp -r \`pkg-config --cflags-only-I flatbuffers|cut -c 3-\`/flatbuffers fb/`
+	* ``cp -r `pkg-config --cflags-only-I flatbuffers|cut -c 3-`/flatbuffers fb/``
 * Set up libxml2 for pkg-config to find
 	* `brew info libxml2` to see instructions (set PKG_CONFIG_PATH in $HOME/.bash_profile or $HOME/.zshrc)
 * FCollada for converting assets (https://github.com/matthewlai/fcollada)
