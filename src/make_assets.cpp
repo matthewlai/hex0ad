@@ -2,6 +2,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -186,7 +187,7 @@ std::string Extension(const std::string& s) {
   return s.substr(s.find_last_of('.') + 1);
 }
 
-void WriteToFile(const std::string& path, uint8_t* buf, std::size_t size) {
+void WriteToFile(const std::string& path, const uint8_t* buf, std::size_t size) {
   std::size_t last_separator = path.find_last_of('/');
   std::string dir = path.substr(0, last_separator);
   std::string filename = path.substr(last_separator + 1);
@@ -195,6 +196,10 @@ void WriteToFile(const std::string& path, uint8_t* buf, std::size_t size) {
       path.c_str(),
       std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
   of.write(reinterpret_cast<const char*>(buf), size);
+}
+
+void WriteFB(const std::string& path_stem, const flatbuffers::FlatBufferBuilder& builder) {
+  WriteToFile(path_stem + ".fb", builder.GetBufferPointer(), builder.GetSize());
 }
 
 XMLNode* DeepCopy(XMLNode* node, TinyXMLDocument* doc) {
@@ -541,7 +546,7 @@ void ReduceInfluences(FCDSkinController* skin) {
   skin->SetDirtyFlag();
 }
 
-std::vector<uint8_t> g_skeleton_buffers;
+std::vector<std::vector<uint8_t>> g_skeleton_buffers;
 std::vector<const data::Skeleton*> g_skeletons;
 
 struct SkeletonSelection {
@@ -893,8 +898,8 @@ void ParseMesh(const std::string& mesh_path) {
     /*attachment_point_transforms=*/builder.CreateVector(attachment_point_transforms)
     );
   builder.Finish(mesh_fb);
-  WriteToFile(std::string(kOutputPrefix) + kMeshPathPrefix + RemoveExtension(mesh_path) + ".fb",
-              builder.GetBufferPointer(), builder.GetSize());
+  WriteFB(std::string(kOutputPrefix) + kMeshPathPrefix + RemoveExtension(mesh_path),
+          builder);
 }
 
 std::unique_ptr<ThreadPool> g_texture_pool;
@@ -1121,8 +1126,8 @@ void MakeActor(const std::string& actor_path) {
       /*groups=*/builder.CreateVector(groups),
       /*material=*/builder.CreateString(material));
   builder.Finish(actor);
-  WriteToFile(std::string(kOutputPrefix) + kActorPathPrefix + RemoveExtension(actor_path) + ".fb",
-              builder.GetBufferPointer(), builder.GetSize());
+  WriteFB(std::string(kOutputPrefix) + kActorPathPrefix + RemoveExtension(actor_path),
+          builder);
 }
 
 void MakeTerrain(const std::string& terrain_path) {
@@ -1163,8 +1168,8 @@ void MakeTerrain(const std::string& terrain_path) {
       /*path=*/builder.CreateString(RemoveExtension(terrain_path)),
       /*textures=*/builder.CreateVector(texture_offsets));
   builder.Finish(terrain);
-  WriteToFile(std::string(kOutputPrefix) + kTerrainPathPrefix + RemoveExtension(terrain_path) + ".fb",
-              builder.GetBufferPointer(), builder.GetSize());
+  WriteFB(std::string(kOutputPrefix) + kTerrainPathPrefix + RemoveExtension(terrain_path),
+          builder);
 }
 
 void GetAllStandardSkeletonBones(XMLHandle node, std::vector<std::string>* bones) {
@@ -1192,7 +1197,7 @@ void GetAllSkeletonBoneMappings(XMLHandle node, const std::string parent_target,
       target = GetTextContent(targets[0]);
     }
 
-    auto it = canonical_bones.find(name);
+    auto it = canonical_bones.find(target);
     if (it == canonical_bones.end()) {
       LOG_ERROR("Bone % has target %, which is not in the canonical set", name, target);
       continue;
@@ -1311,13 +1316,14 @@ void MakeSkeleton(const std::string& skeleton_path) {
 
   // We have to save a copy of the buffer to back our list of skeletons, because
   // the builder is about to go out of scope.
-  for (std::size_t i = 0; i < builder.GetSize(); ++i) {
-    g_skeleton_buffers.push_back(builder.GetBufferPointer()[i]);
-  }
-  g_skeletons.push_back(data::GetSkeleton(g_skeleton_buffers.data() + g_skeleton_buffers.size() - builder.GetSize()));
+  std::vector<uint8_t> new_buffer(builder.GetSize());
+  auto buffer_span = builder.GetBufferSpan();
+  std::copy(buffer_span.begin(), buffer_span.end(), new_buffer.begin());
+  g_skeleton_buffers.push_back(std::move(new_buffer));
+  g_skeletons.push_back(data::GetSkeleton(g_skeleton_buffers.back().data()));
   
-  WriteToFile(std::string(kOutputPrefix) + kSkeletonPathPrefix + RemoveExtension(skeleton_path) + ".fb",
-              builder.GetBufferPointer(), builder.GetSize());
+  WriteFB(std::string(kOutputPrefix) + kSkeletonPathPrefix + RemoveExtension(skeleton_path),
+          builder);
 }
 
 int main(int /*argc*/, char** /*argv*/) {
@@ -1331,9 +1337,16 @@ int main(int /*argc*/, char** /*argv*/) {
   }
 
   // Do skeletons first in the main thread because they are fast and we need them for
-  // parsing meshes.
-  for (const auto& path : kSkeletonPaths) {
-    MakeSkeleton(path);
+  // parsing meshes. There is no easy way to find all used skeletons in actors without
+  // parsing all the skeleton files. Since there aren't that many of them, we just do
+  // them all.
+  std::vector<std::string> skeletons;
+
+  for (const auto &entry : std::filesystem::directory_iterator(std::string(kInputPrefix)
+      + kSkeletonPathPrefix)) {
+    if (entry.path().extension() == ".xml") {
+      MakeSkeleton(entry.path().stem());
+    }
   }
 
   LOG_INFO("Using % threads per thread pool", threads_to_use);

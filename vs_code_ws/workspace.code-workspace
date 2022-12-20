@@ -15,6 +15,10 @@
 				"binaryPath": "/Users/matthewlai/Repositories/hex0ad/bin/hex0ad",
 				"binaryArgs": []
 			}
-		]
+		],
+		"files.associations": {
+			"sstream": "cpp",
+			"iosfwd": "cpp"
+		}
 	}
 }
