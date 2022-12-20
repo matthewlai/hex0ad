@@ -237,12 +237,20 @@ namespace Logger
 		}
 		
 		std::string message_with_prefix_suffix = GenerateMessageWithPrefixSuffix_(level, message);
-		
+
 		if (ShouldLog_(level, m_stdErrLevel))
 		{
 			std::lock_guard<std::mutex> lock(GetStdErrMutex_());
+
+			int colour_code = 39; // FG_DEFAULT
+
+			if (level == eLevel::WARN) {
+				colour_code = 33; // Yellow
+			} else if (level == eLevel::ERROR || level == eLevel::FATAL) {
+				colour_code = 31; // Red
+			}
 		
-			std::cerr << message_with_prefix_suffix;
+			std::cerr << "\033[" << colour_code << "m" << message_with_prefix_suffix << "\033[0m";
 			std::cerr.flush();
 		}
 		
