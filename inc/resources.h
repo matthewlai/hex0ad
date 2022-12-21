@@ -18,6 +18,7 @@ static constexpr const char* kTestActorPaths[] = {
     "units/romans/hero_cavalry_swordsman_maximus_r",
     "units/romans/cavalry_javelinist_a_m",
     "units/spartans/female_citizen",
+    "units/han/infantry_archer_a",
     };
 
 static constexpr const char* kTestTerrainPaths[] = {
