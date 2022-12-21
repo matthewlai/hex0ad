@@ -1,5 +1,7 @@
 import os
 
+# Delete with: find . -name *.json -delete
+
 dirs = [
   ('assets/art/actors', 'fb/actor.fbs'),
   ('assets/art/meshes', 'fb/mesh.fbs'),
