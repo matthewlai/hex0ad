@@ -1385,8 +1385,8 @@ void MakeSkeleton(const std::string& skeleton_path) {
   // We have to save a copy of the buffer to back our list of skeletons, because
   // the builder is about to go out of scope.
   std::vector<uint8_t> new_buffer(builder.GetSize());
-  auto buffer_span = builder.GetBufferSpan();
-  std::copy(buffer_span.begin(), buffer_span.end(), new_buffer.begin());
+  auto* buffer_ptr = builder.GetBufferPointer();
+  std::copy(buffer_ptr, buffer_ptr + builder.GetSize(), new_buffer.begin());
   g_skeleton_buffers.push_back(std::move(new_buffer));
   g_skeletons.push_back(data::GetSkeleton(g_skeleton_buffers.back().data()));
   
