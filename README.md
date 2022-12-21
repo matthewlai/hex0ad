@@ -1,5 +1,9 @@
 # hex0ad
-Tile-based strategy game using 0ad assets
+Tile-based strategy game using 0ad assets.
+
+This project is still in very early stages, and at the moment only a renderer and parsing code to load 0ad actors have been written.
+
+A web version showcasing the current state of the project can be found at [https://matthewlai.ca/hex0ad](https://matthewlai.ca/hex0ad). A [modern browser supporting WebGL 2](https://caniuse.com/webgl2) and WebAssembly is required (eg. modern Chrome, Firefox, Edge, or Safari).
 
 # BUILD
 ## Requirements
