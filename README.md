@@ -7,18 +7,14 @@ Tile-based strategy game using 0ad assets
 ### Linux (Debian-based, including Raspberry Pi 4)
 * SDL2 SDL ttf, GLEW, CMake
 	* `sudo apt install libsdl2-dev libsdl2-ttf-dev libglew-dev cmake`
-* Flatc compiler (https://github.com/google/flatbuffers/releases)
-	* `git clone https://github.com/google/flatbuffers.git`
-	* `cd flatbuffers`
-	* `cmake . -DFLATBUFFERS_BUILD_TESTS=OFF -DFLATBUFFERS_PACKAGE_DEBIAN=ON`
-	* `make -j6 package`
-	* `sudo dpkg -i flatbuffers_*.deb`
-	* `cp -r include/flatbuffers fb/`
+* Flatbuffers
+	* `sudo apt install flatbuffers-compiler flatbuffers-compiler-dev libflatbuffers-dev`
+	* `cp -r /usr/include/flatbuffers fb`
 * FCollada for converting assets (https://github.com/matthewlai/fcollada)
 	* `git clone https://github.com/matthewlai/fcollada.git`
 	* `cd fcollada`
 	* `cmake . -DCMAKE_INSTALL_PREFIX=/usr`
-	* `make MAKE="make -j6" && make install`
+	* `make MAKE="make -j6" && sudo make install`
 
 ### Windows
 * MinGW-W64 (https://sourceforge.net/projects/mingw-w64/, use online installer)
@@ -63,12 +59,6 @@ Tile-based strategy game using 0ad assets
 	* `cmake .`
 	* Build with `make -j 6 && make install` (or as appropriate for how many CPU cores you have)
 
-### Emscripten (web)
-* Install emscripten (https://emscripten.org/docs/getting_started/downloads.html#sdk-download-and-install)
-* Follow OS-appropriate instructions to install flatbuffers and copy headers to fb/
-* Build with `OPT=-O3 emmake make`
-* Or to run with an embedded server: `OPT=-O3 emmake make run_web`
-
 ## Download and convert 0ad Assets (All Platforms)
 * See 0ad_assets/readme.txt for instructions to download 0ad assets (currently based on Alpha 26: Zhuangzi)
 * Convert assets to hex0ad format:
@@ -80,3 +70,9 @@ Tile-based strategy game using 0ad assets
 
 ## Run the game
 * `bin/hex0ad`
+
+### Build with Emscripten (web)
+* Install emscripten (https://emscripten.org/docs/getting_started/downloads.html#sdk-download-and-install)
+* Follow OS-appropriate instructions to install flatbuffers and copy headers to fb/
+* Build with `OPT=-O3 emmake make`
+* Or to run with an embedded server: `OPT=-O3 emmake make run_web`
