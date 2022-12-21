@@ -39,8 +39,10 @@ endif
 WEB_BIN=hex0ad
 
 CXXFILES := $(wildcard src/*.cpp)
-CXXFILES += third_party/tinyxml2/tinyxml2.cpp
 CXXFILES += third_party/lodepng/lodepng.cpp
+ifndef EM_BUILD
+	CXXFILES += third_party/tinyxml2/tinyxml2.cpp
+endif
 
 # We don't actually support C, so treat libimagequant differently.
 # CFLAGS are copied from the official Makefile.
@@ -63,6 +65,10 @@ OBJS := $(CXXFILES:%.cpp=obj/%.o)
 DEPS := $(CXXFILES:%.cpp=dep/%.d)
 BIN_OBJS = $(BINS:bin/%=obj/src/%.o)
 
+ifdef EM_BUILD
+	DEPS := $(filter-out dep/src/make_assets.d, $(DEPS))
+endif
+
 ifeq ($(WINDOWS_BUILD), 1)
 	BIN_OBJS = $(BINS:bin/%.exe=obj/src/%.o)
 endif
@@ -77,7 +83,7 @@ CXXFLAGS_DEP = -std=gnu++17
 # Flags.
 ifeq ($(EM_BUILD), 1)
 	PORTS =  -s USE_SDL=2 -s USE_SDL_TTF=2
-	CXXFLAGS = $(INCLUDES) -std=gnu++17 $(PORTS) $(OPT)
+	CXXFLAGS = -std=gnu++17 $(PORTS) $(OPT)
 	LDFLAGS =  $(PORTS) -s WASM=1 -s ALLOW_MEMORY_GROWTH=1
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
@@ -152,7 +158,7 @@ bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o -o $@ $(LDFLAGS)
 	
 clean:
-	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES) $(FLATBUFFER_GENERATED_FILES) fb/flatbuffers/flatbuffers.h
+	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES) $(FLATBUFFER_GENERATED_FILES)
 
 $(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) $(SHADERS) obj/src/hex0ad.o em_shell.html
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)

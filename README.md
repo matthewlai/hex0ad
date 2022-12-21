@@ -63,6 +63,12 @@ Tile-based strategy game using 0ad assets
 	* `cmake .`
 	* Build with `make -j 6 && make install` (or as appropriate for how many CPU cores you have)
 
+### Emscripten (web)
+* Install emscripten (https://emscripten.org/docs/getting_started/downloads.html#sdk-download-and-install)
+* Follow OS-appropriate instructions to install flatbuffers and copy headers to fb/
+* Build with `OPT=-O3 emmake make`
+* Or to run with an embedded server: `OPT=-O3 emmake make run_web`
+
 ## Download and convert 0ad Assets (All Platforms)
 * See 0ad_assets/readme.txt for instructions to download 0ad assets (currently based on Alpha 26: Zhuangzi)
 * Convert assets to hex0ad format:
