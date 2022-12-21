@@ -22,6 +22,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <queue>
 #include <set>
