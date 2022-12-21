@@ -6,7 +6,7 @@ Tile-based strategy game using 0ad assets
 
 ### Linux (Debian-based, including Raspberry Pi 4)
 * SDL2 SDL ttf, GLEW, CMake
-	* `sudo apt install libsdl2-dev libsdl2-ttf-dev libglew-dev cmake`
+	* `sudo apt install libsdl2-dev libsdl2-ttf-dev libglew-dev libxml2-dev cmake`
 * Flatbuffers
 	* `sudo apt install flatbuffers-compiler flatbuffers-compiler-dev libflatbuffers-dev`
 	* `cp -r /usr/include/flatbuffers fb`
