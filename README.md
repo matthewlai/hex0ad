@@ -64,16 +64,13 @@ Tile-based strategy game using 0ad assets
 	* Build with `make -j 6 && make install` (or as appropriate for how many CPU cores you have)
 
 ## Download and convert 0ad Assets (All Platforms)
-* Download https://0adassets.s3-us-west-2.amazonaws.com/assets.7z, and extract into 0ad_assets, so you should end up with:
-	* 0ad_assets/art
-	* 0ad_assets/audio
-	* ...
+* See 0ad_assets/readme.txt for instructions to download 0ad assets (currently based on Alpha 26: Zhuangzi)
 * Convert assets to hex0ad format:
-	* `make`
+	* `OPT=-O3 make`
 	* `bin/make_assets`
 
 ## Build the game
-* `make`
+* `OPT=-O3 make`
 
 ## Run the game
 * `bin/hex0ad`

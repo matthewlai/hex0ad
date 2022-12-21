@@ -44,6 +44,7 @@ static constexpr const char* kVariantPathPrefix = "art/variants/";
 static constexpr const char* kTerrainPathPrefix = "art/terrains/";
 static constexpr const char* kTerrainTexturePathPrefix = "terrain/";
 
+static constexpr const char* kAnimationPathPrefix = "art/animation/";
 static constexpr const char* kSkeletonPathPrefix = "art/skeletons/";
 
 // How many joints can influence a vertex.

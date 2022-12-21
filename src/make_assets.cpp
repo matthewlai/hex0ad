@@ -235,6 +235,13 @@ void ProcessVariantIncludes(XMLElement* element, TinyXMLDocument* doc) {
   }
   ProcessVariantIncludes(root, doc);
 
+  // Copy attributes over.
+  auto attr = root->FirstAttribute();
+  while (attr != nullptr) {
+    element->SetAttribute(attr->Name(), attr->Value());
+    attr = attr->Next();
+  }
+
   XMLNode* child = root->FirstChild();
   while (child) {
     element->InsertEndChild(DeepCopy(child, doc));
@@ -978,7 +985,39 @@ void MakeActor(const std::string& actor_path) {
     throw std::runtime_error(std::string("Failed to open: ") + full_path);
   }
 
-  XMLHandle root = XMLHandle(xml_doc.FirstChildElement("actor"));
+  XMLHandle root(nullptr);
+
+  // An actor may have multiple qualitylevels. Get the highest quality one if so.
+  auto* qualitylevels = xml_doc.FirstChildElement("qualitylevels");
+  XMLElement* maybe_inline = nullptr;
+  if (qualitylevels != nullptr) {
+    std::vector<XMLHandle> actor_levels = GetAllChildrenElements(XMLHandle(qualitylevels), "actor");
+    for (auto& actor : actor_levels) {
+      const char* maybe_quality = actor.ToElement()->Attribute("quality");
+      // We are looking for one with either quality="high" or no quality attribute.
+      if (!maybe_quality || std::string(maybe_quality) == "high") {
+        root = actor;
+        break;
+      }
+    }
+    if (!root.ToElement()) {
+      throw std::runtime_error(std::string("Didn't find right quality level actor: ") + full_path);
+    }
+
+    // TODO: what do inline versions mean and do we care about them?
+    maybe_inline = qualitylevels->FirstChildElement("inline");
+  } else {
+    root = XMLHandle(xml_doc.FirstChildElement("actor"));
+  }
+
+  if (maybe_inline != nullptr && root.ToElement()->Attribute("inline") != nullptr) {
+    XMLNode* child = maybe_inline->FirstChild();
+    while (child) {
+      root.ToElement()->InsertEndChild(DeepCopy(child, &xml_doc));
+      child = child->NextSibling();
+    }
+  }
+
   std::vector<XMLHandle> xml_groups = GetAllChildrenElements(root, "group");
 
   if (xml_groups.empty()) {
@@ -1087,11 +1126,37 @@ void MakeActor(const std::string& actor_path) {
             std::string attachpoint = attachpoint_attr;
             props_offsets.push_back(data::CreateProp(
                 builder,
-                /*actor=*/builder.CreateString(RemoveExtension(actor) + ".fb"),
+                /*actor=*/builder.CreateString(RemoveExtension(actor)),
                 /*attachpoint=*/builder.CreateString(attachpoint)));
             LOG_DEBUG("Prop: % (%)", actor, attachpoint);
             MakeActor(actor);
           }
+        }
+      }
+
+      auto animations_containers = GetAllChildrenElements(xml_variant, "animations");
+      std::vector<flatbuffers::Offset<data::Animation>> animation_offsets;
+      if (animations_containers.size() > 1) {
+        throw std::runtime_error("More than one <animations>?");
+      } else if (animations_containers.size() == 1) {
+        auto animations = GetAllChildrenElements(animations_containers[0], "animation");
+        for (auto& animation : animations) {
+          auto name_attrib = animation.ToElement()->Attribute("name");
+          auto file_attrib = animation.ToElement()->Attribute("file");
+          std::string name = name_attrib ? name_attrib : "";
+          std::string file = file_attrib ? file_attrib : "";
+          int int_speed = animation.ToElement()->IntAttribute("speed", 0);
+          // See https://github.com/0ad/0ad/blob/412f1d0da275a12df16e140fca7523590e5f7cfe/source/graphics/ObjectBase.cpp#L310
+          float speed = int_speed > 0 ? (int_speed / 100.0f) : 1.0f;
+          if (file != "") {
+            //EnqueueAnimation(kAnimationPathPrefix + file);
+          }
+          animation_offsets.push_back(data::CreateAnimation(
+              builder,
+              /*name=*/builder.CreateString(name),
+              /*file=*/builder.CreateString(RemoveExtension(file)),
+              /*speed=*/speed)
+          );
         }
       }
 
@@ -1104,6 +1169,7 @@ void MakeActor(const std::string& actor_path) {
       auto mesh_path_offset = builder.CreateString(mesh_path);
       auto props_vector_offset = builder.CreateVector(props_offsets);
       auto textures_vector_offset = builder.CreateVector(texture_offsets);
+      auto animations_vector_offset = builder.CreateVector(animation_offsets);
 
       data::VariantBuilder variant_builder(builder);
       variant_builder.add_name(name_offset);
@@ -1111,6 +1177,7 @@ void MakeActor(const std::string& actor_path) {
       variant_builder.add_mesh_path(mesh_path_offset);
       variant_builder.add_props(props_vector_offset);
       variant_builder.add_textures(textures_vector_offset);
+      variant_builder.add_animations(animations_vector_offset);
 
       if (maybe_object_colour) {
         variant_builder.add_object_colour(&(*maybe_object_colour));

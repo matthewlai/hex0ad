@@ -286,7 +286,7 @@ int main(int /*argc*/, char** /*argv*/) {
   g_state.ui = std::make_unique<UI>();
 
   for (const auto& path : kTestActorPaths) {
-    g_state.actors.push_back(ActorTemplate::GetTemplate(std::string(path) + ".fb").MakeActor());
+    g_state.actors.push_back(ActorTemplate::GetTemplate(std::string(path)).MakeActor());
     if (std::string(path).find("units") != std::string::npos) {
       g_state.actors.rbegin()->SetScale(3.0f);
     }

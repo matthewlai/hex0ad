@@ -16,6 +16,12 @@ struct Colour {
   b:float;
 }
 
+table Animation {
+  path:string;
+  name:string;
+  speed:float;
+}
+
 // Variants with frequency > 0 may be randomly selected.
 // Variants with frequency = 0 are either disabled or selected by name.
 // Each variant may have animations, (1x) mesh, props, and/or textures.
@@ -26,6 +32,7 @@ table Variant {
   props:[Prop];
   textures:[Texture];
   object_colour:Colour;
+  animations:[Animation];
 }
 
 table Group {

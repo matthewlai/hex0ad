@@ -190,7 +190,7 @@ void Actor::AddPropIfNotExist(const std::string& attachpoint, const ActorTemplat
 
 ActorTemplate::ActorTemplate(const std::string& actor_path, std::mt19937* rng)
     : rng_(rng) {
-  std::string full_path = std::string(kActorPathPrefix) + actor_path;
+  std::string full_path = std::string(kActorPathPrefix) + actor_path + ".fb";
   actor_raw_buffer_ = ReadWholeFile(full_path);
   actor_data_ = data::GetActor(actor_raw_buffer_.data());
   LOG_INFO("Actor loaded: %", actor_data_->path()->str());
