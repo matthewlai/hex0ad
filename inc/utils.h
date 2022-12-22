@@ -39,6 +39,10 @@ std::vector<std::uint8_t> ReadWholeFile(const std::string& path);
 
 std::string ReadWholeFileString(const std::string& path);
 
+bool HaveDebugFolder();
+
+void WriteWholeFileString(const std::string& path, const std::string& data);
+
 // Get steady clock time in microseconds (for durations only).
 inline uint64_t GetTimeUs() {
   using Clock = std::chrono::steady_clock;

@@ -144,6 +144,9 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
   LOG_INFO("Compiling % (vertex shader)", vertex_shader_file_name);
   auto compile_result = CompileShader(GL_VERTEX_SHADER,
                                       vertex_shader_source);
+  if (HaveDebugFolder()) {
+    WriteWholeFileString("debug/"s + vertex_shader_file_name, compile_result.processed_source);
+  }
   if (compile_result.success) {
     glAttachShader(program_, compile_result.shader);
     vertex_shader_ = compile_result.shader;
@@ -156,6 +159,9 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
 
   LOG_INFO("Compiling % (fragment shader)", fragment_shader_file_name);
   compile_result = CompileShader(GL_FRAGMENT_SHADER, fragment_shader_source);
+  if (HaveDebugFolder()) {
+    WriteWholeFileString("debug/"s + fragment_shader_file_name, compile_result.processed_source);
+  }
 
   if (compile_result.success) {
     glAttachShader(program_, compile_result.shader);

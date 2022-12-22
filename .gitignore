@@ -27,3 +27,4 @@ make_assets
 .vscode/*
 fb/flatbuffers/pch
 fb/flatbuffers/*.h
+debug

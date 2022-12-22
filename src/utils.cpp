@@ -1,6 +1,7 @@
 #include "utils.h"
 
 #include <cstring>
+#include <filesystem>
 
 std::vector<std::uint8_t> ReadWholeFile(const std::string& path) {
   std::ifstream is(path.c_str(), std::ifstream::in | std::ifstream::binary);
@@ -26,6 +27,18 @@ std::string ReadWholeFileString(const std::string& path) {
   std::string buf(len, '\0');
   is.read(reinterpret_cast<char*>(buf.data()), len);
   return buf;
+}
+
+bool HaveDebugFolder() {
+  return std::filesystem::exists("debug");
+}
+
+void WriteWholeFileString(const std::string& path, const std::string& data) {
+  std::ofstream out(path.c_str(), std::ofstream::binary);
+  if (!out) {
+    throw std::runtime_error(std::string("Opening ") + path + " for writing failed: " + strerror(errno));
+  }
+  out.write(data.c_str(), data.size());
 }
 
 #ifdef HAVE_GLEW
