@@ -32,50 +32,6 @@ uniform vec3 alpha_colour;
 // but increases peter-paning.
 const float kDepthBias = 0.002f;
 
-// N=1 no filtering
-/*
-const int kDepthMapFilterSize = 1;
-const float kDepthMapFilterMultiplier = 1.0f;
-const float[] kDepthMapFilter = float[](1.0f);
-const ivec2[] kDepthMapFilterOffsets = ivec2[](ivec2(0, 0));
-*/
-
-// N=3 kernel
-
-const int kDepthMapFilterSize = 9;
-const float kDepthMapFilterMultiplier = 1.0f / 16.0f;
-const float[] kDepthMapFilter = float[](
-  1.0f, 2.0f, 1.0f,
-  2.0f, 4.0f, 2.0f,
-  1.0f, 2.0f, 1.0f
-);
-const ivec2[] kDepthMapFilterOffsets = ivec2[](
-  ivec2(-1, -1), ivec2(0, -1), ivec2(1, -1),
-  ivec2(-1, 0), ivec2(0, 0), ivec2(1, 0),
-  ivec2(-1, 1), ivec2(0, 1), ivec2(1, 1)
-);
-
-
-// N=5 kernel
-/*
-const int kDepthMapFilterSize = 25;
-const float kDepthMapFilterMultiplier = 1.0f / 256.0f;
-const float[] kDepthMapFilter = float[](
-  1.0f,  4.0f,  6.0f,  4.0f,  1.0f,
-  4.0f, 16.0f, 24.0f, 16.0f,  4.0f,
-  6.0f, 24.0f, 36.0f, 24.0f,  6.0f,
-  4.0f, 16.0f, 24.0f, 16.0f,  4.0f,
-  1.0f,  4.0f,  6.0f,  4.0f,  1.0f
-);
-const ivec2[] kDepthMapFilterOffsets = ivec2[](
-  ivec2(-2, -2), ivec2(-1, -2), ivec2(0, -2), ivec2(1, -2), ivec2(2, -2),
-  ivec2(-2, -1), ivec2(-1, -1), ivec2(0, -1), ivec2(1, -1), ivec2(2, -1),
-  ivec2(-2, 0), ivec2(-1, 0), ivec2(0, 0), ivec2(1, 0), ivec2(2, 0),
-  ivec2(-2, 1), ivec2(-1, 1), ivec2(0, 1), ivec2(1, 1), ivec2(2, 1),
-  ivec2(-2, 2), ivec2(-1, 2), ivec2(0, 2), ivec2(1, 2), ivec2(2, 2)
-);
-*/
-
 float shadow() {
   if (!use_shadows) {
     return 0.0f;
@@ -94,42 +50,20 @@ float shadow() {
 
   shadow_tex_coords.z -= depth_bias;
 
-  // TODO: implement early exit.
+  // Hard coded unrolled 3x3 filtering because many compilers seem to have problems
+  // with this.
+  shadow =
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(-1, -1)) * 1.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(0, -1)) * 2.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(1, -1)) * 1.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(-1, 0)) * 2.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(0, 0)) * 4.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(1, 0)) * 2.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(-1, 1)) * 1.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(0, 1)) * 2.0f +
+    textureOffset(shadow_texture, shadow_tex_coords, ivec2(1, 1)) * 1.0f;
 
-  // We have to unroll this for ANGLE.
-  float depths[kDepthMapFilterSize] = float[](
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[0]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[1]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[2]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[3]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[4]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[5]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[6]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[7]),
-    textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[8])
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[9]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[10]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[11]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[12]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[13]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[14]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[15]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[16]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[17]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[18]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[19]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[20]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[21]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[22]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[23]),
-    // textureOffset(shadow_texture, shadow_tex_coords, kDepthMapFilterOffsets[24])
-  );
-
-  for (int i = 0; i < kDepthMapFilterSize; ++i) {
-    shadow += depths[i] * kDepthMapFilter[i];
-  }
-
-  return 1.0f - shadow * kDepthMapFilterMultiplier;
+  return 1.0f - shadow / 16.0f;
 }
 
 vec3 mix_colour(vec3 ambient, vec3 diffuse, vec3 specular) {
