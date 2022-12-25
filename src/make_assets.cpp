@@ -32,17 +32,27 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #pragma GCC diagnostic ignored "-Wtype-limits"
 #pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#pragma GCC diagnostic ignored "-Wdeprecated-anon-enum-enum-conversion"
 #include "gli/gli.hpp"
 #pragma GCC diagnostic pop
 
 #include "lodepng/lodepng.h"
 #include "tinyxml2/tinyxml2.h"
 #include "libimagequant.h"
+#include "0ad/decompose.h"
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#pragma GCC diagnostic ignored "-Wdeprecated-copy-with-user-provided-copy"
+#pragma GCC diagnostic ignored "-Wdeprecated-anon-enum-enum-conversion"
 // Include order is important because FCollada headers have a lot of missing includes.
 #include <FCollada.h>
 #include <FUtils/Platforms.h>
 #include <FUtils/FUtils.h>
+#include <FCDocument/FCDocument.h>
+#include "FCDocument/FCDAnimated.h"
+#include "FCDocument/FCDAnimationCurve.h"
+#include "FCDocument/FCDAnimationKey.h"
 #include <FCDocument/FCDAsset.h>
 #include <FCDocument/FCDController.h>
 #include <FCDocument/FCDControllerInstance.h>
@@ -55,6 +65,7 @@
 #include <FCDocument/FCDGeometryPolygonsInput.h>
 #include <FCDocument/FCDGeometryPolygonsTools.h>
 #include <FCDocument/FCDGeometrySource.h>
+#pragma GCC diagnostic pop
 
 using TinyXMLDocument = tinyxml2::XMLDocument;
 using tinyxml2::XMLElement;
@@ -266,7 +277,28 @@ class ColladaDocument {
   // Returns true for success.
   bool LoadFromText(const std::string& text) {
     content_ = text;
-    return FCollada::LoadDocumentFromMemory("unknown.dae", doc_, reinterpret_cast<void*>(content_.data()), text.size());
+
+    // Unfortunately we have to serialize this because FCollada doesn't seem to be thread-safe. But it seems
+    // to be fine as long as we guard the loading part? Not sure. We can enlarge the critical section if
+    // we get more crashes.
+    {
+      static std::mutex mutex;
+      std::lock_guard<std::mutex> lock(mutex);
+      if (!FCollada::LoadDocumentFromMemory("unknown.dae", doc_, reinterpret_cast<void*>(content_.data()), text.size())) {
+        return false;
+      }
+    }
+
+    // 0ad has support for files generated with XSI, but there doesn't seem to be any, so we don't support it.
+    FCDAsset* asset = doc_->GetAsset();
+    if (asset && asset->GetContributorCount() >= 1) {
+      std::string tool(asset->GetContributor(0)->GetAuthoringTool());
+      if (tool.find("XSI") != tool.npos) {
+        throw std::runtime_error("XSI files aren't supported");
+      }
+    }
+
+    return true;
   }
 
   FCDocument* Doc() { return doc_; }
@@ -557,16 +589,38 @@ void ReduceInfluences(FCDSkinController* skin) {
 std::vector<std::vector<uint8_t>> g_skeleton_buffers;
 std::vector<const data::Skeleton*> g_skeletons;
 
-struct SkeletonSelection {
+class SkeletonSelection {
+ public:
   const data::Skeleton* skeleton;
   const data::SkeletonMapping* mapping;
+
+  SkeletonSelection() : skeleton(nullptr), mapping(nullptr) {}
+
+  SkeletonSelection(const data::Skeleton* skeleton, const data::SkeletonMapping* mapping)
+      : skeleton(skeleton), mapping(mapping) {
+        name_to_id_ = std::map<std::string, int>();
+    for (std::size_t i = 0; i < mapping->bone_names()->size(); ++i) {
+      (*name_to_id_)[mapping->bone_names()->GetAsString(i)->str()] = mapping->canonical_ids()->Get(i);
+    }
+  }
+
+  std::optional<int> FindBoneId(const std::string& s) const {
+    if (name_to_id_->contains(s)) {
+      return (*name_to_id_)[s];
+    } else {
+      return std::nullopt;
+    }
+  }
+
+ private:
+  std::optional<std::map<std::string, int>> name_to_id_;
 };
 
 std::optional<SkeletonSelection> FindSkeleton(const std::string& root_name) {
   for (const auto* skeleton : g_skeletons) {
     for (const auto* mapping : *(skeleton->mappings())) {
       if (root_name == mapping->root_name()->str()) {
-        return SkeletonSelection{skeleton, mapping};
+        return SkeletonSelection(skeleton, mapping);
       }
     }
   }
@@ -684,14 +738,7 @@ void ParseMesh(const std::string& mesh_path) {
   std::string source = ReadWholeFileString(full_path);
   ColladaDocument cdoc;
 
-  // Unfortunately we have to serialize this because FCollada doesn't seem to be thread-safe. But it seems
-  // to be fine as long as we guard the loading part? Not sure. We can enlarge the critical section if
-  // we get more crashes.
-  {
-    static std::mutex mutex;
-    std::lock_guard<std::mutex> lock(mutex);
-    cdoc.LoadFromText(source);
-  }
+  cdoc.LoadFromText(source);
 
   FCDSceneNode* root = cdoc.Doc()->GetVisualSceneRoot();
   if (!root) {
@@ -910,7 +957,7 @@ void ParseMesh(const std::string& mesh_path) {
           builder);
 }
 
-std::unique_ptr<ThreadPool> g_texture_pool;
+std::unique_ptr<ThreadPool> g_texture_animation_pool;
 
 void SaveTexture(const std::string& texture_path) {
   static DoneTracker done_tracker;
@@ -966,9 +1013,239 @@ void SaveTexture(const std::string& texture_path) {
   }
 }
 
+std::pair<float, float> GetAnimationRange(
+  const FCDocument* doc, const SkeletonSelection& skeleton_selection,
+	const FCDControllerInstance& controller_instance) {
+  // FCollada tools export <extra> info in the scene to specify the start
+  // and end times.
+  // If that isn't available, we have to search for the earliest and latest
+  // keyframes on any of the bones.
+  if (doc->HasStartTime() && doc->HasEndTime()) {
+    return std::make_pair(doc->GetStartTime(), doc->GetEndTime());
+  }
+
+  // XSI support omitted (there doesn't seem to be any XSI file in the assets anyways?)
+
+  float start = std::numeric_limits<float>::max();
+  float end = std::numeric_limits<float>::lowest();
+  for (size_t i = 0; i < controller_instance.GetJointCount(); ++i)
+  {
+    const FCDSceneNode* joint = controller_instance.GetJoint(i);
+    if (joint == nullptr) {
+      throw std::runtime_error("Joint doesn't exist");
+    }
+
+    auto maybe_bone_id = skeleton_selection.FindBoneId(joint->GetName().c_str());
+
+    if (!maybe_bone_id) {
+      // unrecognised joint - it's probably just a prop point
+      // or something, so ignore it
+      continue;
+    }
+
+    // Skip unanimated joints
+    if (joint->GetTransformCount() == 0) {
+      continue;
+    }
+
+    for (std::size_t j = 0; j < joint->GetTransformCount(); ++j) {
+      const FCDTransform* transform = joint->GetTransform(j);
+
+      if (!transform->IsAnimated()) {
+        continue;
+      }
+
+      // Iterate over all curves to find the earliest and latest keys
+      const FCDAnimated* anim = transform->GetAnimated();
+      const FCDAnimationCurveListList& curve_list = anim->GetCurves();
+      for (size_t k = 0; k < curve_list.size(); ++k) {
+        const FCDAnimationCurveTrackList& curves = curve_list[k];
+        for (size_t l = 0; l < curves.size(); ++l) {
+          const FCDAnimationCurve* curve = curves[l];
+          start = std::min(start, curve->GetKeys()[0]->input);
+          end = std::max(end, curve->GetKeys()[curve->GetKeyCount()-1]->input);
+        }
+      }
+    }
+  }
+
+  return std::make_pair(start, end);
+}
+
+struct BoneTransform {
+	float translation[3];
+	float orientation[4];
+};
+
+void EvaluateAnimations(FCDSceneNode& node, float time)	{
+  for (size_t i = 0; i < node.GetTransformCount(); ++i)
+  {
+    FCDTransform* transform = node.GetTransform(i);
+    FCDAnimated* anim = transform->GetAnimated();
+    if (anim)
+      anim->Evaluate(time);
+  }
+
+  for (size_t i = 0; i < node.GetChildrenCount(); ++i)
+    EvaluateAnimations(*node.GetChild(i), time);
+}
+
+// Logic from: https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/CommonConvert.cpp#L397
+void TransformBones(std::vector<BoneTransform>& bones, bool yup) {
+	for (size_t i = 0; i < bones.size(); ++i)	{
+		if (yup)
+		{
+			bones[i].translation[2] = -bones[i].translation[2];
+			bones[i].orientation[2] = -bones[i].orientation[2];
+			bones[i].orientation[3] = -bones[i].orientation[3];
+		}
+		else
+		{
+			// Convert bone translations from xyz into xzy axes:
+			std::swap(bones[i].translation[1], bones[i].translation[2]);
+
+			// To convert the quaternions: imagine you're using the axis/angle
+			// representation, then swap the y,z basis vectors and change the
+			// direction of rotation by negating the angle ( => negating sin(angle)
+			// => negating x,y,z => changing (x,y,z,w) to (-x,-z,-y,w)
+			// but then (-x,-z,-y,w) == (x,z,y,-w) so do that instead)
+			std::swap(bones[i].orientation[1], bones[i].orientation[2]);
+			bones[i].orientation[3] = -bones[i].orientation[3];
+		}
+	}
+}
+
+// The logic here is copied from:
+// https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/PSAConvert.cpp#L61
+void SaveAnimation(const std::string& animation_path) {
+  static DoneTracker done_tracker;
+  if (done_tracker.ShouldSkip(animation_path)) {
+    return;
+  }
+  std::string full_path = std::string(kInputPrefix) + kAnimationPathPrefix + animation_path;
+  LOG_INFO("Saving animation: %", animation_path);
+  flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
+  std::ifstream is(full_path);
+  auto file_content = ReadWholeFileString(full_path);
+  std::string output_path =
+      std::string(kOutputPrefix) + kAnimationPathPrefix + RemoveExtension(animation_path) + ".fb";
+  ColladaDocument cdoc;
+  cdoc.LoadFromText(file_content);
+
+  FCDSceneNode* root = cdoc.Doc()->GetVisualSceneRoot();
+  if (!root) {
+    LOG_ERROR("Failed to parse %: we have no root", animation_path);
+    return;
+  }
+
+  FMVector3 up_axis = cdoc.Doc()->GetAsset()->GetUpAxis();
+  bool yup = (up_axis.y != 0); // assume either Y_UP or Z_UP.
+
+  TransformedInstance t_instance = FindSingleInstance(root);
+  if (t_instance.instance->GetEntity()->GetType() == FCDEntity::CONTROLLER) {
+    FCDControllerInstance& controller_instance =
+        static_cast<FCDControllerInstance&>(*(t_instance.instance));
+
+    FCDController* controller =
+        static_cast<FCDController*>(t_instance.instance->GetEntity());
+
+    FCDSkinController* skin = controller->GetSkinController();
+    if (skin == NULL) {
+      throw std::runtime_error("Not a skin controller?");
+    }
+
+    auto maybe_skeleton = FindSkeleton(&controller_instance);
+
+    if (!maybe_skeleton) {
+      LOG_ERROR("No skeleton found: %", full_path);
+      throw std::runtime_error("No skeleton found");
+    }
+
+    SkeletonSelection skeleton_selection = *maybe_skeleton;
+
+    constexpr float kFrameLength = 1.0f / 30.0f; // Always 30fps for now.
+
+    // Find the extents of the animation:
+    auto [time_start, time_end] = GetAnimationRange(
+        cdoc.Doc(), skeleton_selection, controller_instance);
+    // To catch broken animations / skeletons.xml:
+    if (time_end <= time_start) {
+      LOG_ERROR("animation end frame must come after start frame: %", full_path);
+      throw std::runtime_error("animation end frame must come after start frame");
+    }
+
+    // Count frames; don't include the last keyframe
+    size_t frame_count = static_cast<std::size_t>((time_end - time_start) / kFrameLength - 0.5f);
+    if (frame_count == 0) {
+      LOG_ERROR("Animation must have frames: %", full_path);
+      throw std::runtime_error("animation must have frames");
+    }
+
+    const size_t bone_count = skeleton_selection.mapping->bone_names()->size();
+    if (bone_count > 64) {
+      LOG_ERROR("Skeleton has too many bones %/64", bone_count);
+      throw std::runtime_error("Skeleton has too many bones");
+    }
+
+    std::vector<BoneTransform> bone_transforms;
+
+    for (std::size_t frame = 0; frame < frame_count; ++frame) {
+      float time = time_start + kFrameLength * frame;
+
+      constexpr BoneTransform kBoneDefault = {{0, 0, 0}, {0, 0, 0, 1}};
+      std::vector<BoneTransform> frame_bone_transforms(bone_count, kBoneDefault);
+
+      // Move the model into the new animated pose
+      // (We can't tell exactly which nodes should be animated, so
+      // just update the entire world recursively)
+      EvaluateAnimations(*root, time);
+
+      // Convert the pose into the form require by the game
+      for (size_t i = 0; i < controller_instance.GetJointCount(); ++i) {
+        FCDSceneNode* joint = controller_instance.GetJoint(i);
+
+        auto maybe_bone_id = skeleton_selection.FindBoneId(joint->GetName().c_str());
+        if (!maybe_bone_id) {
+          continue;  // not a recognised bone - ignore it, same as before
+        }
+
+        FMMatrix44 world_transform = joint->CalculateWorldTransform();
+
+        HMatrix matrix;
+        memcpy(matrix, world_transform.Transposed().m, sizeof(matrix));
+
+        AffineParts parts;
+        decomp_affine(matrix, &parts);
+
+        BoneTransform b = {{parts.t.x, parts.t.y, parts.t.z},
+                           {parts.q.x, parts.q.y, parts.q.z, parts.q.w}};
+
+        frame_bone_transforms[*maybe_bone_id] = b;
+      }
+
+      // Push frameBoneTransforms onto the back of boneTransforms
+      std::copy(frame_bone_transforms.begin(), frame_bone_transforms.end(),
+                std::back_inserter(bone_transforms));
+    }
+
+    // Convert into game's coordinate space
+    TransformBones(bone_transforms, yup);
+
+    // Write out the file
+    //WritePSA(output, frameCount, boneCount, boneTransforms);
+  } else {
+    throw std::runtime_error(std::string("Unrecognised entity type in: ") + full_path);
+  }
+}
+
 void EnqueueTexture(const std::string& texture_path) {
-  g_texture_pool->Push([texture_path]() { SaveTexture(texture_path); });
+  g_texture_animation_pool->Push([texture_path]() { SaveTexture(texture_path); });
   LOG_INFO("Enqueued texture %", texture_path);
+}
+
+void EnqueueAnimation(const std::string& animation_path) {
+  g_texture_animation_pool->Push([animation_path]() { SaveAnimation(animation_path); });
+  LOG_INFO("Enqueued animation %", animation_path);
 }
 
 std::unique_ptr<ThreadPool> g_parser_pool;
@@ -1150,7 +1427,7 @@ void MakeActor(const std::string& actor_path) {
           // See https://github.com/0ad/0ad/blob/412f1d0da275a12df16e140fca7523590e5f7cfe/source/graphics/ObjectBase.cpp#L310
           float speed = int_speed > 0 ? (int_speed / 100.0f) : 1.0f;
           if (file != "") {
-            //EnqueueAnimation(kAnimationPathPrefix + file);
+            EnqueueAnimation(file);
           }
           animation_offsets.push_back(data::CreateAnimation(
               builder,
@@ -1419,8 +1696,8 @@ int main(int /*argc*/, char** /*argv*/) {
 
   LOG_INFO("Using % threads per thread pool", threads_to_use);
 
-  g_texture_pool = std::make_unique<ThreadPool>(threads_to_use);
-  g_texture_pool->Run();
+  g_texture_animation_pool = std::make_unique<ThreadPool>(threads_to_use);
+  g_texture_animation_pool->Run();
 
   g_parser_pool = std::make_unique<ThreadPool>(threads_to_use);
   g_parser_pool->Run();
@@ -1440,7 +1717,7 @@ int main(int /*argc*/, char** /*argv*/) {
   // more textures.
   g_parser_pool.reset();
 
-  g_texture_pool.reset();
+  g_texture_animation_pool.reset();
 
   FCollada::Release();
   LOG_INFO("Took % seconds", (GetTimeUs() - start_time) / 1000000.0f);
