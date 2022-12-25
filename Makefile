@@ -42,6 +42,7 @@ CXXFILES := $(wildcard src/*.cpp)
 CXXFILES += third_party/lodepng/lodepng.cpp
 ifndef EM_BUILD
 	CXXFILES += third_party/tinyxml2/tinyxml2.cpp
+	CXXFILES += third_party/0ad/decompose.cpp
 endif
 
 # We don't actually support C, so treat libimagequant differently.
@@ -78,19 +79,19 @@ INCLUDES +=-Iinc -Ithird_party -Ifb -Ithird_party/libimagequant
 # Platforms.
 DEFAULT_TARGETS = $(BINS)
 
-CXXFLAGS_DEP = -std=gnu++17
+CXXFLAGS_DEP = -std=gnu++20
 
 # Flags.
 ifeq ($(EM_BUILD), 1)
 	PORTS =  -s USE_SDL=2 -s USE_SDL_TTF=2
-	CXXFLAGS = -std=gnu++17 $(PORTS) $(OPT)
+	CXXFLAGS = -std=gnu++20 $(PORTS) $(OPT)
 	LDFLAGS =  $(PORTS) -s WASM=1 -s ALLOW_MEMORY_GROWTH=1
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
-	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++17 -ffast-math -Wno-unused-const-variable -g $(OPT)
+	CXXFLAGS += -Wall -Wextra -Wno-unused-function -std=gnu++20 -ffast-math -Wno-unused-const-variable -g $(OPT)
 	LDFLAGS = -lm
 
 	ifeq ($(OS),Windows_NT)
@@ -120,6 +121,8 @@ else
 		# libxml2 dependencies.
 		INCLUDES += $(shell pkg-config --cflags libxml-2.0)
 		LDFLAGS += $(shell pkg-config --libs libxml-2.0)
+
+		INCLUDES += -Ithird_party/0ad
 
 		# OpenGL dependencies.
 		ifeq ($(UNAME_S),Darwin)
