@@ -24,12 +24,12 @@ directories_to_create.extend(all_directories("src"))
 directories_to_create = filter(lambda s : s != "third_party", directories_to_create)
 
 # Exclude GLM and GLI (header-only libraries)
-directories_to_create = filter(lambda s : not s.startswith("third_party\\glm"), directories_to_create)
-directories_to_create = filter(lambda s : not s.startswith("third_party\\gli"), directories_to_create)
+directories_to_create = filter(lambda s : not s.startswith(f"third_party{os.sep}glm"), directories_to_create)
+directories_to_create = filter(lambda s : not s.startswith(f"third_party{os.sep}gli"), directories_to_create)
 
 # Don't care about xcodeproj directories
 directories_to_create = filter(lambda s : "xcodeproj" not in s, directories_to_create)
 
 for dir_name in directories_to_create:
-	create_if_not_exist("dep\\" + dir_name)
-	create_if_not_exist("obj\\" + dir_name)
+	create_if_not_exist("dep" + os.sep + dir_name)
+	create_if_not_exist("obj" + os.sep + dir_name)
