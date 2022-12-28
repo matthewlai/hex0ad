@@ -978,7 +978,8 @@ void ParseMesh(const std::string& mesh_path) {
 
 std::unique_ptr<ThreadPool> g_texture_animation_pool;
 
-void SaveTexture(const std::string& texture_path) {
+// Normal maps need to have inverted green for right handed coordinate system.
+void SaveTexture(const std::string& texture_path, bool invert_green) {
   static DoneTracker done_tracker;
   if (done_tracker.ShouldSkip(texture_path)) {
     return;
@@ -1024,6 +1025,13 @@ void SaveTexture(const std::string& texture_path) {
       }
       width = texture.extent().x;
       height = texture.extent().y;
+    }
+
+    if (invert_green) {
+      for (uint32_t pixel = 0; pixel < (uncompressed.size() / 4); ++pixel) {
+        auto idx = pixel * 4 + 1;
+        uncompressed[idx] = 255 - uncompressed[idx];
+      }
     }
     WriteImageOpt(output_path, &uncompressed, width, height);
   } else {
@@ -1272,9 +1280,9 @@ void SaveAnimation(const std::string& animation_path) {
   }
 }
 
-void EnqueueTexture(const std::string& texture_path) {
-  g_texture_animation_pool->Push([texture_path]() { SaveTexture(texture_path); });
-  LOG_INFO("Enqueued texture %", texture_path);
+void EnqueueTexture(const std::string& texture_path, bool invert_green) {
+  g_texture_animation_pool->Push([=]() { SaveTexture(texture_path, invert_green); });
+  LOG_INFO("Enqueued texture % (invert %)", texture_path, invert_green);
 }
 
 void EnqueueAnimation(const std::string& animation_path) {
@@ -1407,7 +1415,8 @@ void MakeActor(const std::string& actor_path) {
         for (auto& texture : textures) {
           std::string texture_name = texture.ToElement()->Attribute("name");
           std::string texture_file = texture.ToElement()->Attribute("file");
-          EnqueueTexture(kActorTexturePathPrefix + texture_file);
+          bool invert_green = texture_name == "normTex";
+          EnqueueTexture(kActorTexturePathPrefix + texture_file, invert_green);
           texture_offsets.push_back(data::CreateTexture(
               builder,
               /*name=*/builder.CreateString(texture_name),
@@ -1533,7 +1542,8 @@ void MakeTerrain(const std::string& terrain_path) {
     for (auto& texture : textures) {
       std::string texture_name = texture.ToElement()->Attribute("name");
       std::string texture_file = texture.ToElement()->Attribute("file");
-      EnqueueTexture(kTerrainTexturePathPrefix + texture_file);
+      bool invert_green = texture_name == "normTex";
+      EnqueueTexture(kTerrainTexturePathPrefix + texture_file, invert_green);
       texture_offsets.push_back(data::CreateTexture(
           builder,
           /*name=*/builder.CreateString(texture_name),
