@@ -138,6 +138,10 @@ else
 	endif
 endif
 
+ifdef PROFILE
+	CXXFLAGS += -pg
+endif
+
 .PHONY: clean run_web
 
 default: $(DEFAULT_TARGETS)
