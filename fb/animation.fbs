@@ -2,11 +2,8 @@ namespace data;
 
 table Animation {
 	path:string;
-
   frame_time:float;
-
   num_bones:uint32;
-
   num_frames:uint32;
 
   // (3 (translation) + 4 (quat orientation)) * num_bones * num_frames

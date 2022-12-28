@@ -256,7 +256,7 @@ void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, con
   }
 
   RenderMesh(mesh_path, textures, context->projection * context->view,
-             model * attachpoints["main_mesh"], maybe_alpha_colour, context);
+             model * attachpoints["root"], maybe_alpha_colour, context);
 
   for (auto& [point, prop_actors] : *(actor->Props())) {
     auto it = attachpoints.find(point);

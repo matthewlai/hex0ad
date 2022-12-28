@@ -16,7 +16,7 @@ struct Colour {
   b:float;
 }
 
-table Animation {
+table AnimationSpec {
   path:string;
   name:string;
   speed:float;
@@ -32,7 +32,7 @@ table Variant {
   props:[Prop];
   textures:[Texture];
   object_colour:Colour;
-  animations:[Animation];
+  animations:[AnimationSpec];
 }
 
 table Group {

@@ -20,6 +20,7 @@
 #include "utils.h"
 
 #include "actor_generated.h"
+#include "animation_generated.h"
 #include "mesh_generated.h"
 #include "resources.h"
 #include "skeleton_generated.h"
@@ -280,7 +281,8 @@ class ColladaDocument {
 
     // Unfortunately we have to serialize this because FCollada doesn't seem to be thread-safe. But it seems
     // to be fine as long as we guard the loading part? Not sure. We can enlarge the critical section if
-    // we get more crashes.
+    // we get more crashes. I think it's due to libxml not being thread safe. Unfortunately it does take up
+    // a large portion of the total run time.
     {
       static std::mutex mutex;
       std::lock_guard<std::mutex> lock(mutex);
@@ -495,6 +497,24 @@ struct VertexData {
   void SetUV1(float* x) { std::copy(x, x + 2, UV1()); }
   void SetBoneId(int i, float id) { *(BoneId(i)) = id; }
   void SetBoneWeight(int i, float weight) { *(BoneWeight(i)) = weight; }
+
+  void ApplyTransform(const FMMatrix44& model_matrix) {
+    FMVector3 position(Position()[0], Position()[1], Position()[2]);
+    FMVector3 normal(Normal()[0], Normal()[1], Normal()[2]);
+    FMVector3 tangent(Tangent()[0], Tangent()[1], Tangent()[2]);
+
+    // We should technically be using normal matrix here instead of model
+    // matrix, but they are the same because we are not doing anisotropic
+    // scaling.
+    position = model_matrix.TransformVector(position);
+    normal = model_matrix.TransformVector(normal);
+    tangent = model_matrix.TransformVector(tangent);
+    normal.NormalizeIt();
+    tangent.NormalizeIt();
+    SetPosition(position);
+    SetNormal(normal);
+    SetTangent(tangent);
+  }
 };
 
 struct IndexedVertexData {
@@ -605,10 +625,11 @@ class SkeletonSelection {
   }
 
   std::optional<int> FindBoneId(const std::string& s) const {
-    if (name_to_id_->contains(s)) {
-      return (*name_to_id_)[s];
-    } else {
+    const auto it = name_to_id_->find(s);
+    if (it == name_to_id_->end()) {
       return std::nullopt;
+    } else {
+      return it->second;
     }
   }
 
@@ -867,7 +888,17 @@ void ParseMesh(const std::string& mesh_path) {
     }
   }
 
+  // We use z-up, so do a rotate if the model is y-up.
+  FMMatrix44 up_transform = FMMatrix44::Identity;
+  if (yup) {
+    up_transform = FMMatrix44::XAxisRotationMatrix(M_PI / 2.0f);
+  }
+
   IndexedVertexData ivd = Reindex(std::move(vertex_datas));
+
+  for (auto& vd : ivd.vds) {
+    vd.ApplyTransform(up_transform * t_instance.transform);
+  }
 
   LOG_DEBUG("% deduplicated vertex data", ivd.vds.size());
 
@@ -912,18 +943,6 @@ void ParseMesh(const std::string& mesh_path) {
   }
 
   std::vector<AttachmentPoint> attachment_points;
-
-  // We use z-up, so do a rotate if the model is y-up.
-  FMMatrix44 up_transform = FMMatrix44::Identity;
-  if (yup) {
-    up_transform = FMMatrix44::XAxisRotationMatrix(M_PI / 2.0f);
-  }
-
-  AttachmentPoint main_point;
-  main_point.name = "main_mesh";
-  main_point.transform = up_transform * t_instance.transform;
-
-  attachment_points.push_back(main_point);
 
   AddAttachmentPoints(root, up_transform, &attachment_points);
 
@@ -1090,29 +1109,26 @@ void EvaluateAnimations(FCDSceneNode& node, float time)	{
     EvaluateAnimations(*node.GetChild(i), time);
 }
 
+// Applies transform to each transformation in bones, and optionally change the coordinate system to z-up (from y-up).
 // Logic from: https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/CommonConvert.cpp#L397
-void TransformBones(std::vector<BoneTransform>& bones, bool yup) {
-	for (size_t i = 0; i < bones.size(); ++i)	{
-		if (yup)
-		{
-			bones[i].translation[2] = -bones[i].translation[2];
-			bones[i].orientation[2] = -bones[i].orientation[2];
-			bones[i].orientation[3] = -bones[i].orientation[3];
-		}
-		else
-		{
-			// Convert bone translations from xyz into xzy axes:
-			std::swap(bones[i].translation[1], bones[i].translation[2]);
+// But we want a right-handed z-up system.
+void TransformBones(std::vector<BoneTransform>& bones, const FMMatrix44& transform, bool yup) {
+  for (size_t i = 0; i < bones.size(); ++i)	{
+    FMVector3 trans(bones[i].translation, 0);
+    trans = transform.TransformCoordinate(trans);
+    bones[i].translation[0] = trans.x;
+    bones[i].translation[1] = trans.y;
+    bones[i].translation[2] = trans.z;
 
-			// To convert the quaternions: imagine you're using the axis/angle
-			// representation, then swap the y,z basis vectors and change the
-			// direction of rotation by negating the angle ( => negating sin(angle)
-			// => negating x,y,z => changing (x,y,z,w) to (-x,-z,-y,w)
-			// but then (-x,-z,-y,w) == (x,z,y,-w) so do that instead)
-			std::swap(bones[i].orientation[1], bones[i].orientation[2]);
-			bones[i].orientation[3] = -bones[i].orientation[3];
-		}
-	}
+    if (yup) {
+      // Swap trans.y and trans.z
+      std::swap(bones[i].translation[1], bones[i].translation[2]);
+
+      // Change xyzw to xzyw, but negating new Y to preserve chirality.
+      std::swap(bones[i].orientation[1], bones[i].orientation[2]);
+      bones[i].orientation[1] *= -1.0f;
+    }
+  }
 }
 
 // The logic here is copied from:
@@ -1128,7 +1144,7 @@ void SaveAnimation(const std::string& animation_path) {
   std::ifstream is(full_path);
   auto file_content = ReadWholeFileString(full_path);
   std::string output_path =
-      std::string(kOutputPrefix) + kAnimationPathPrefix + RemoveExtension(animation_path) + ".fb";
+      std::string(kOutputPrefix) + kAnimationPathPrefix + RemoveExtension(animation_path);
   ColladaDocument cdoc;
   cdoc.LoadFromText(file_content);
 
@@ -1229,10 +1245,28 @@ void SaveAnimation(const std::string& animation_path) {
     }
 
     // Convert into game's coordinate space
-    TransformBones(bone_transforms, yup);
+    TransformBones(bone_transforms, FMMatrix44::Identity, yup);
 
-    // Write out the file
-    //WritePSA(output, frameCount, boneCount, boneTransforms);
+    std::vector<float> bone_states_buf;
+    bone_states_buf.reserve(bone_count * frame_count * 7);
+    for (const auto& transform : bone_transforms) {
+      std::copy(transform.translation, transform.translation + 3,
+                std::back_inserter(bone_states_buf));
+      std::copy(transform.orientation, transform.orientation + 4,
+                std::back_inserter(bone_states_buf));
+    }
+
+    flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
+    auto animation = data::CreateAnimation(
+      builder,
+      /*path=*/builder.CreateString(output_path),
+      /*frame_time=*/kFrameLength,
+      /*num_bones=*/bone_count,
+      /*num_frames=*/frame_count,
+      /*bone_states=*/builder.CreateVector(bone_states_buf)
+    );
+    builder.Finish(animation);    
+    WriteFB(output_path, builder);
   } else {
     throw std::runtime_error(std::string("Unrecognised entity type in: ") + full_path);
   }
@@ -1413,7 +1447,7 @@ void MakeActor(const std::string& actor_path) {
       }
 
       auto animations_containers = GetAllChildrenElements(xml_variant, "animations");
-      std::vector<flatbuffers::Offset<data::Animation>> animation_offsets;
+      std::vector<flatbuffers::Offset<data::AnimationSpec>> animation_offsets;
       if (animations_containers.size() > 1) {
         throw std::runtime_error("More than one <animations>?");
       } else if (animations_containers.size() == 1) {
@@ -1429,7 +1463,7 @@ void MakeActor(const std::string& actor_path) {
           if (file != "") {
             EnqueueAnimation(file);
           }
-          animation_offsets.push_back(data::CreateAnimation(
+          animation_offsets.push_back(data::CreateAnimationSpec(
               builder,
               /*name=*/builder.CreateString(name),
               /*file=*/builder.CreateString(RemoveExtension(file)),
