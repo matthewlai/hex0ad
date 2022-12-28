@@ -111,9 +111,6 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   } else {
     shader->SetUniform("model"_name, model);
 
-    glm::mat3 normal_matrix = glm::inverseTranspose(glm::mat3(model));
-    shader->SetUniform("normal_matrix"_name, normal_matrix);
-
     // Graphics settings.
     #define GraphicsSetting(upper, lower, type, default, toggle_key) \
       shader->SetUniform(NameLiteral(#lower), context->lower);

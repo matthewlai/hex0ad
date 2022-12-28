@@ -8,16 +8,15 @@ layout(location = 4) in vec2 v_ao_tex_coords;
 
 uniform mat4 mvp;
 uniform mat4 model;
-uniform mediump mat3 normal_matrix;
 
 #include "light.vinc"
 
 void main() {
   gl_Position = mvp * vec4(v_position, 1.0);
 
-  vec3 tangent = normalize(vec3(normal_matrix * v_tangent));
-  vec3 bitangent = normalize(vec3(normal_matrix * cross(v_normal, v_tangent)));
-  vec3 normal = normalize(vec3(normal_matrix * v_normal));
+  vec3 tangent = normalize(vec4(model * vec4(v_tangent, 0.0)).xyz);
+  vec3 bitangent = normalize(vec4(model * vec4(cross(v_normal, v_tangent), 0.0)).xyz);
+  vec3 normal = normalize(vec4(model * vec4(v_normal, 0.0)).xyz);
 
   set_tex_coords(v_tex_coords);
 
