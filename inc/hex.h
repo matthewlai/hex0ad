@@ -1,9 +1,12 @@
 #ifndef HEX_H
 #define HEX_H
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include "glm/gtc/type_ptr.hpp"
 #include "glm/gtx/string_cast.hpp"
 #include "glm/gtx/transform.hpp"
+#pragma GCC diagnostic pop
 
 #include <cmath>
 #include <cstdint>
