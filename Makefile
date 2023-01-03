@@ -166,7 +166,6 @@ bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 	
 clean:
 	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES) $(FLATBUFFER_GENERATED_FILES)
-	-$(Q) rm -rf assets/art
 
 $(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) $(SHADERS) obj/src/hex0ad.o em_shell.html
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)
