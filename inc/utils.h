@@ -145,6 +145,10 @@ struct BoneTransform {
   glm::mat4 ToMatrix() {
     return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(orientation);
   }
+
+  glm::mat4 ToInvMatrix() {
+    return glm::toMat4(glm::inverse(orientation)) * glm::translate(glm::mat4(1.0f), -translation);
+  }
 };
 
 inline BoneTransform ReadBoneTransform(const float* data) {

@@ -45,6 +45,10 @@ table Mesh {
   // Transformation matrices of each attachment point.
   // Size nAttachmentPoints * 4 * 4.
   attachment_point_transforms:[float];
+
+  // Attach point transforms can either be relative to bind pose
+  // or a bone. 0xff means bind pose.
+  attachment_point_bones:[ubyte];
 }
 
 root_type Mesh;

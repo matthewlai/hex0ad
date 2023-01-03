@@ -130,9 +130,11 @@ bool main_loop() {
   static uint64_t last_frame_rate_report = GetTimeUs();
   static uint64_t frames_since_last_report = 0;
 
+  uint64_t current_time_us = GetTimeUs();
+
   // World updates.
   for (auto& actor : g_state.actors) {
-    actor.Update();
+    actor.Update(current_time_us);
   }
 
   int mouse_x;
@@ -303,6 +305,7 @@ int main(int /*argc*/, char** /*argv*/) {
     glm::vec2 position(dist * cos(arg), dist * sin(arg));
     position = g_state.terrain->SnapToGrid(position);
     g_state.actors[i].SetPosition(glm::vec3(position.x, position.y, 0.0f));
+    g_state.actors[i].SetRotationRad(arg + 0.5f * M_PI);
   }
 
   #ifdef __EMSCRIPTEN__

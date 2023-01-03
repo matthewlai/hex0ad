@@ -17,8 +17,8 @@ namespace {
 static constexpr const char* kAnimationPathPrefix = "assets/art/animation/";
 }
 
-std::vector<glm::mat4> Animation::Update() {
-  float normalised_time = static_cast<float>((GetTimeUs() - start_time_us_) / 1000000.0f) / template_->Duration();
+std::vector<glm::mat4> Animation::Update(uint64_t time_us) {
+  float normalised_time = static_cast<float>((time_us - start_time_us_) / 1000000.0f) / template_->Duration() * speed_;
   if (normalised_time >= 1.0f) {
     done_ = true;
   }

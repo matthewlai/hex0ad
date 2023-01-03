@@ -33,8 +33,16 @@ struct MeshGPUData {
   bool skinned;
 };
 
-std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_name) {
-  static std::map<std::string, std::map<std::string, glm::mat4>> cache;
+struct AttachmentPoints {
+  // Either relative to root or bone.
+  glm::mat4 transform;
+
+  // Relative to bone if bone != 0xFF.
+  uint8_t bone;
+};
+
+std::map<std::string, AttachmentPoints> GetAttachPoints(const std::string& mesh_file_name) {
+  static std::map<std::string, std::map<std::string, AttachmentPoints>> cache;
   auto it = cache.find(mesh_file_name);
   if (it == cache.end()) {
     // This raw buffer only needs to survive for as long as we want to read
@@ -44,16 +52,19 @@ std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_na
         ReadWholeFile(std::string(kMeshPathPrefix) + mesh_file_name);
     const data::Mesh* mesh_data = data::GetMesh(raw_buffer.data());
 
-    std::map<std::string, glm::mat4> ret;
+    std::map<std::string, AttachmentPoints> ret;
 
     for (std::size_t i = 0; i < mesh_data->attachment_point_names()->size(); ++i) {
       float mtx[16];
       for (int j = 0; j < 16; ++j) {
         mtx[j] = mesh_data->attachment_point_transforms()->Get(i * 16 + j);
       }
-      ret[mesh_data->attachment_point_names()->Get(i)->str()] = glm::make_mat4(mtx);
-      LOG_DEBUG("Attachment Point %\n%", mesh_data->attachment_point_names()->Get(i)->str(),
-                glm::to_string(glm::make_mat4(mtx)));
+      AttachmentPoints pt;
+      pt.transform = glm::make_mat4(mtx);
+      pt.bone = mesh_data->attachment_point_bones()->Get(i);
+      ret[mesh_data->attachment_point_names()->Get(i)->str()] = std::move(pt);
+      LOG_DEBUG("Attachment Point % (bone: %)\n%", mesh_data->attachment_point_names()->Get(i)->str(),
+                pt.bone, glm::to_string(pt.transform));
     }
 
     it = cache.insert(std::make_pair(mesh_file_name, ret)).first;
@@ -163,7 +174,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 }
 
 Actor::Actor(const ActorTemplate* actor_template)
-    : state_(ActorState::kIdle), template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
+    : state_(ActorState::kIdle), template_(actor_template), position_(0.0f, 0.0f, 0.0f), rotation_rad_(0.0f), scale_(1.0f) {
   for (int group = 0; group < template_->NumGroups(); ++group) {
     std::vector<float> probability_densities;
     for (int variant = 0; variant < template_->NumVariants(group); ++variant) {
@@ -178,33 +189,27 @@ Actor::Actor(const ActorTemplate* actor_template)
   animation_specs_ = template_->AnimationSpecs(this);
 }
 
-void Actor::Update() {
+void Actor::Update(uint64_t time_us) {
   if (!active_animation_ || active_animation_->Done()) {
     // We are out of animation. See if we can start a new one.
     if (state_ == ActorState::kIdle) {
       if (animation_specs_.find("Idle") != animation_specs_.end()) {
         const auto& candidates = animation_specs_["Idle"];
-        const auto& animation_template = AnimationTemplate::GetTemplate(candidates[0]->path()->str());
-        active_animation_ = animation_template.MakeAnimation();
-        active_animation_->Start();
+        const auto& spec = candidates[0];
+        const auto& animation_template = AnimationTemplate::GetTemplate(spec->path()->str());
+        active_animation_ = animation_template.MakeAnimation(spec->speed());
+        active_animation_->Start(time_us);
         LOG_INFO("Starting new animation: %", candidates[0]->path()->str());
       }
     }
   }
   if (active_animation_) {
-    auto to_bone_space = template_->BindPoseInverses(this);
-    auto to_frame = active_animation_->Update();
+    bone_transforms_ = active_animation_->Update(time_us);
+  }
 
-    if (to_bone_space.size() != to_frame.size()) {
-      LOG_ERROR("Bind pose inverse and animation frame joint count mismatch: % != %",
-                to_bone_space.size(), to_frame.size());
-      return;
-    }
-
-    bone_transforms_.resize(to_bone_space.size());
-
-    for (std::size_t joint = 0; joint != to_bone_space.size(); ++joint) {
-      bone_transforms_[joint] = to_frame[joint] * to_bone_space[joint];
+  for (auto& [point, props] : props_) {
+    for (auto& prop : props) {
+      prop->Update(time_us);
     }
   }
 }
@@ -213,8 +218,8 @@ void Actor::Render(RenderContext* context) {
   // Models are supposed to be using 2m units, so scaling by 0.5 here give us 1m units to match rest of the game.
   // https://trac.wildfiregames.com/wiki/ArtScaleAndProportions
   Render(context,
-         glm::translate(glm::mat4(1.0f), -position_) * glm::scale(glm::vec3(scale_, scale_, scale_)) *
-         glm::scale(glm::vec3(0.5f, 0.5f, 0.5f)));
+         glm::translate(glm::mat4(1.0f), -position_) * glm::rotate(rotation_rad_, glm::vec3(0.0f, 0.0f, 1.0f)) *
+         glm::scale(glm::vec3(scale_ * 0.5f, scale_ * 0.5f, scale_ * 0.5f)));
 }
 
 void Actor::Render(RenderContext* context, const glm::mat4& model) {
@@ -244,7 +249,7 @@ void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, con
   std::string mesh_path;
   TextureSet textures;
   std::map<std::string, std::vector<ActorTemplate*>> props;
-  std::map<std::string, glm::mat4> attachpoints;
+  std::map<std::string, AttachmentPoints> attachpoints;
   std::optional<glm::vec3> object_colour;
 
   bool shadow_pass = context->pass == RenderPass::kShadow;
@@ -282,8 +287,6 @@ void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, con
     return;
   }
 
-  attachpoints["root"] = glm::mat4(1.0f);
-
   auto* material_field = actor_data_->material();
 
   std::optional<glm::vec3> maybe_alpha_colour;
@@ -299,15 +302,53 @@ void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, con
     }
   }
 
+  bool skinning = !actor->BoneTransforms().empty();
+
+  // Make bone transforms pre-multiplied by bind pose inverses, and
+  // with the virtual bind pose bone added.
+  std::vector<glm::mat4> final_bone_transforms;
+
+  if (skinning) {
+    auto to_bone_space = BindPoseInverses(actor);
+
+    if (to_bone_space.size() != actor->BoneTransforms().size()) {
+      LOG_ERROR("Bind pose inverse and animation frame joint count mismatch: % != %",
+                to_bone_space.size(), actor->BoneTransforms().size());
+      return;
+    }
+
+    final_bone_transforms.resize(to_bone_space.size() + 1);
+
+    for (std::size_t joint = 0; joint != to_bone_space.size(); ++joint) {
+      final_bone_transforms[joint] = actor->BoneTransforms()[joint] * to_bone_space[joint];
+    }
+
+    // Special bind pose virtual bone (identity in our case, since we pre-applied model
+    // transform in the model)
+    final_bone_transforms[final_bone_transforms.size() - 1] = glm::mat4(1.0f);
+  }
+
+  // If we are skinning, we should render to "root" because our inverse bind
+  // pose transform already takes that into account. Otherwise we use the
+  // "mesh_root" point which is "root" + root entity transform.
+  glm::mat4 render_root = skinning ?
+      attachpoints["root"].transform : attachpoints["mesh_root"].transform;
+
   RenderMesh(mesh_path, textures, context->projection * context->view,
-             model * attachpoints["root"], maybe_alpha_colour,
-             actor->BoneTransforms(), context);
+             model * render_root, maybe_alpha_colour,
+             final_bone_transforms, context);
 
   for (auto& [point, prop_actors] : *(actor->Props())) {
     auto it = attachpoints.find(point);
     if (it != attachpoints.end()) {
+      const AttachmentPoints& pt = it->second;
       for (auto& prop_actor : prop_actors) {
-        glm::mat4 prop_model = model * it->second;
+        glm::mat4 prop_model;
+        if (pt.bone == 0xFF || pt.bone >= actor->BoneTransforms().size()) {
+          prop_model = model * attachpoints["root"].transform * pt.transform;
+        } else {
+          prop_model = model * attachpoints["root"].transform * actor->BoneTransforms()[pt.bone] * pt.transform;
+        }
         prop_actor->Render(context, prop_model);
       }
     }
@@ -352,7 +393,7 @@ std::vector<glm::mat4> ActorTemplate::BindPoseInverses(const Actor* actor) const
     std::vector<glm::mat4> ret(num_joints);
     for (std::size_t joint = 0; joint < num_joints; ++joint) {
       const float* joint_ptr = mesh->bind_pose_transforms()->data() + 7 * joint;
-      ret[joint] = glm::inverse(ReadBoneTransform(joint_ptr).ToMatrix());
+      ret[joint] = ReadBoneTransform(joint_ptr).ToInvMatrix();
     }
     it = cache.insert({mesh_path, ret}).first;
   }  

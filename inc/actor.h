@@ -33,12 +33,13 @@ class Actor : public Renderable {
 
   Actor(const ActorTemplate* actor_template);
 
-  void Update();
+  void Update(uint64_t time_us);
 
   void Render(RenderContext* context) override;
   void Render(RenderContext* context, const glm::mat4& model);
 
   void SetPosition(const glm::vec3& new_position) { position_ = new_position; }
+  void SetRotationRad(float rotation_rad) { rotation_rad_ = rotation_rad; }
   void SetScale(float new_scale) { scale_ = new_scale; }
 
   int NumGroups() const { return variant_selections_.size(); }
@@ -77,8 +78,11 @@ class Actor : public Renderable {
   const ActorTemplate* template_;
 
   glm::vec3 position_;
+  float rotation_rad_;
   float scale_;
 
+  // These are from bone space to model space (no pre-multiplied bind pose inverse),
+  // and no virtual bind bone.
   std::vector<glm::mat4> bone_transforms_;
 };
 

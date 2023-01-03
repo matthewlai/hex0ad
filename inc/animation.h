@@ -20,13 +20,13 @@ class AnimationTemplate;
 
 class Animation {
  public:
-  Animation(const AnimationTemplate* animation_template)
-      : template_(animation_template), done_(false) {}
+  Animation(const AnimationTemplate* animation_template, float speed)
+      : template_(animation_template), done_(false), speed_(speed) {}
 
-  void Start() { start_time_us_ = GetTimeUs(); }
+  void Start(uint64_t time_us) { start_time_us_ = time_us; }
   
   // Updates animation and returns new bone states.
-  std::vector<glm::mat4> Update();
+  std::vector<glm::mat4> Update(uint64_t time_us);
 
   bool Done() { return done_; }
 
@@ -43,6 +43,8 @@ class Animation {
   // are available (eg. for idle animations).
   bool done_;
 
+  float speed_;
+
   uint64_t start_time_us_;
 };
 
@@ -51,7 +53,7 @@ class AnimationTemplate {
  public:
   static AnimationTemplate& GetTemplate(const std::string& animation_path);
 
-  std::unique_ptr<Animation> MakeAnimation() const { return std::make_unique<Animation>(this); }
+  std::unique_ptr<Animation> MakeAnimation(float speed) const { return std::make_unique<Animation>(this, speed); }
 
   std::string Name() const { return animation_data_->path()->str(); }
 

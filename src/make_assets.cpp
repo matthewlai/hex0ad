@@ -529,28 +529,6 @@ struct RawBoneTransform {
 	float orientation[4];
 };
 
-// Applies transform to each transformation in bones, and optionally change the coordinate system to z-up (from y-up).
-// Logic from: https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/CommonConvert.cpp#L397
-// But we want a right-handed z-up system.
-void TransformBones(std::vector<RawBoneTransform>& bones, const FMMatrix44& transform, bool yup) {
-  for (size_t i = 0; i < bones.size(); ++i)	{
-    FMVector3 trans(bones[i].translation, 0);
-    trans = transform.TransformCoordinate(trans);
-    bones[i].translation[0] = trans.x;
-    bones[i].translation[1] = trans.y;
-    bones[i].translation[2] = trans.z;
-
-    if (yup) {
-      // Swap trans.y and trans.z
-      std::swap(bones[i].translation[1], bones[i].translation[2]);
-
-      // Change xyzw to xzyw, but negating new Y to preserve chirality.
-      std::swap(bones[i].orientation[1], bones[i].orientation[2]);
-      bones[i].orientation[1] *= -1.0f;
-    }
-  }
-}
-
 // Find duplicates, and switch to an indexed representation after de-duplication.
 IndexedVertexData Reindex(std::vector<VertexData>&& vds) {
   // First sort lexicographically.
@@ -701,20 +679,49 @@ std::optional<SkeletonSelection> FindSkeleton(const FCDControllerInstance* contr
 struct AttachmentPoint {
   std::string name;
   FMMatrix44 transform;
+
+  // 0xFF means no bone (relative to bind pose).
+  uint8_t bone;
 };
 
-void AddAttachmentPoints(FCDSceneNode* node, const FMMatrix44& up_transform,
-                         std::vector<AttachmentPoint>* attachment_points) {
+void AddStaticAttachmentPoints(FCDSceneNode* node, std::vector<AttachmentPoint>* attachment_points) {
   if (node->GetName().find("prop-") == 0 || node->GetName().find("prop_") == 0) {
     AttachmentPoint pt;
     pt.name = node->GetName().substr(5);
     LOG_DEBUG("Prop point % found", pt.name);
-    pt.transform = up_transform * node->CalculateWorldTransform();
+    pt.transform = node->CalculateWorldTransform();
+    pt.bone = 0xFF;
     attachment_points->push_back(std::move(pt));
   }
 
   for (std::size_t i = 0; i < node->GetChildrenCount(); ++i) {
-    AddAttachmentPoints(node->GetChild(i), up_transform, attachment_points);
+    AddStaticAttachmentPoints(node->GetChild(i), attachment_points);
+  }
+}
+
+void AddSkinnedAttachmentPoints(FCDControllerInstance* controller_instance, std::size_t joint_count,
+                                const SkeletonSelection& skeleton,
+                                std::vector<AttachmentPoint>* attachment_points) {
+  for (std::size_t i = 0; i < joint_count; ++i) {
+    FCDSceneNode* joint = controller_instance->GetJoint(i);
+    auto maybe_bone_id = skeleton.FindBoneId(joint->GetName().c_str());
+    if (!maybe_bone_id) {
+      // unrecognised joint name - ignore, same as before
+      continue;
+    }
+
+    // Check all the objects attached to this bone
+    for (size_t j = 0; j < joint->GetChildrenCount(); ++j) {
+      FCDSceneNode* child = joint->GetChild(j);
+      if (child->GetName().find("prop-") == 0 || child->GetName().find("prop_") == 0) {
+        AttachmentPoint pt;
+        pt.name = child->GetName().substr(5);
+        LOG_DEBUG("Adding skinned prop point %", pt.name);
+        pt.transform = child->ToMatrix();
+        pt.bone = *maybe_bone_id;
+        attachment_points->push_back(std::move(pt));
+      }
+    }
   }
 }
 
@@ -915,6 +922,10 @@ void ParseMesh(const std::string& mesh_path) {
     up_transform = FMMatrix44::XAxisRotationMatrix(M_PI / 2.0f);
   }
 
+  // This is either entity transform if not skinned, or skin->GetBindShapeTransform() if
+  // skinned. The static case is equivalent to converter.GetEntityTransform() in 0ad.
+  FMMatrix44 model_transform = skin ? skin->GetBindShapeTransform() : t_instance.transform;
+
   for (uint64_t vertex = 0; vertex < num_vertices; ++vertex) {
     VertexData* vd = &vertex_datas[vertex];
     vd->SetPosition(&positions_data[vertex * 3]);
@@ -1011,16 +1022,10 @@ void ParseMesh(const std::string& mesh_path) {
 
 				bind_pose_bones[*maybe_bone_id] = b;
 			}
-
-      TransformBones(bind_pose_bones, t_instance.transform, yup);
     }
   }
 
   IndexedVertexData ivd = Reindex(std::move(vertex_datas));
-
-  for (auto& vd : ivd.vds) {
-    vd.ApplyTransform(up_transform * t_instance.transform);
-  }
 
   LOG_DEBUG("% deduplicated vertex data", ivd.vds.size());
 
@@ -1093,12 +1098,30 @@ void ParseMesh(const std::string& mesh_path) {
 
   std::vector<AttachmentPoint> attachment_points;
 
-  AddAttachmentPoints(root, up_transform, &attachment_points);
+  if (skin) {
+    AddSkinnedAttachmentPoints(controller_instance, joint_count, skeleton, &attachment_points);
+  } else {
+    AddStaticAttachmentPoints(root, &attachment_points);
+  }
+
+  // Add the "root" attachment point, which is the DAE root, and where prop points, bind poses, etc, are
+  // all relative to when we use Collada to calculate world transform.
+  AttachmentPoint root_pt;
+  root_pt.name = "root";
+  root_pt.transform = up_transform;
+  attachment_points.push_back(std::move(root_pt));
+
+  // Add The "mesh_root" attachment point, which is "root" plus entity/model transform.
+  AttachmentPoint mesh_pt;
+  mesh_pt.name = "mesh_root";
+  mesh_pt.transform = up_transform * model_transform;
+  attachment_points.push_back(std::move(mesh_pt));
 
   std::vector<std::string> attachment_point_names;
   std::vector<float> attachment_point_transforms;
+  std::vector<uint8_t> attachment_point_bones;
 
-  for (const auto& [name, matrix] : attachment_points) {
+  for (const auto& [name, matrix, bone] : attachment_points) {
     attachment_point_names.push_back(name);
 
     for (int row = 0; row < 4; ++row) {
@@ -1106,6 +1129,8 @@ void ParseMesh(const std::string& mesh_path) {
         attachment_point_transforms.push_back(matrix[row][col]);
       }
     }
+
+    attachment_point_bones.push_back(bone);
   }
 
   auto mesh_fb = data::CreateMesh(
@@ -1121,7 +1146,8 @@ void ParseMesh(const std::string& mesh_path) {
     /*bone_weights=*/builder.CreateVector(bone_weights),
     /*bind_pose_transforms=*/builder.CreateVector(bind_pose_transforms),
     /*attachment_point_names=*/builder.CreateVectorOfStrings(attachment_point_names),
-    /*attachment_point_transforms=*/builder.CreateVector(attachment_point_transforms)
+    /*attachment_point_transforms=*/builder.CreateVector(attachment_point_transforms),
+    /*attachment_point_bones=*/builder.CreateVector(attachment_point_bones)
     );
   builder.Finish(mesh_fb);
   WriteFB(std::string(kOutputPrefix) + kMeshPathPrefix + RemoveExtension(mesh_path),
@@ -1287,9 +1313,6 @@ void SaveAnimation(const std::string& animation_path) {
     return;
   }
 
-  FMVector3 up_axis = cdoc.Doc()->GetAsset()->GetUpAxis();
-  bool yup = (up_axis.y != 0); // assume either Y_UP or Z_UP.
-
   TransformedInstance t_instance = FindSingleInstance(root);
   if (t_instance.instance->GetEntity()->GetType() == FCDEntity::CONTROLLER) {
     FCDControllerInstance& controller_instance =
@@ -1376,9 +1399,6 @@ void SaveAnimation(const std::string& animation_path) {
       std::copy(frame_bone_transforms.begin(), frame_bone_transforms.end(),
                 std::back_inserter(bone_transforms));
     }
-
-    // Convert into game's coordinate space
-    TransformBones(bone_transforms, FMMatrix44::Identity, yup);
 
     std::vector<float> bone_states_buf;
     bone_states_buf.reserve(bone_count * frame_count * 7);
