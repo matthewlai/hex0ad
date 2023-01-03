@@ -5,9 +5,12 @@
 #include <stdexcept>
 #include <vector>
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include "glm/gtc/matrix_inverse.hpp"
 #include "glm/gtx/string_cast.hpp"
 #include "glm/gtx/transform.hpp"
+#pragma GCC diagnostic pop
 
 #include "logger.h"
 #include "renderer.h"
@@ -27,6 +30,7 @@ struct MeshGPUData {
   GLuint shadow_vao_id;
 
   GLsizei num_indices;
+  bool skinned;
 };
 
 std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_name) {
@@ -59,7 +63,7 @@ std::map<std::string, glm::mat4> GetAttachPoints(const std::string& mesh_file_na
 
 void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, const glm::mat4& vp,
                 const glm::mat4& model, std::optional<glm::vec3> maybe_alpha_colour,
-                Renderable::RenderContext* context) {
+                const std::vector<glm::mat4>& bone_transforms, Renderable::RenderContext* context) {
   static std::map<std::string, MeshGPUData> mesh_gpu_data_cache;
   bool shadow_pass = context->pass == RenderPass::kShadow;
   auto it = mesh_gpu_data_cache.find(mesh_file_name);
@@ -75,6 +79,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     data.shader = GetShader("shaders/actor.vs", "shaders/actor.fs");
     data.shader->Activate();
 
+    data.skinned = mesh_data->bind_pose_transforms()->size() > 0;
+
     // Upload all the vertex attributes to the GPU.
     data.vao_id = Renderer::MakeVAO({
       Renderer::VBOSpec(*mesh_data->vertices(), 0, GL_FLOAT, 3),
@@ -82,6 +88,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
       Renderer::VBOSpec(*mesh_data->tangents(), 2, GL_FLOAT, 3),
       Renderer::VBOSpec(*mesh_data->tex_coords(), 3, GL_FLOAT, 2),
       Renderer::VBOSpec(*mesh_data->ao_tex_coords(), 4, GL_FLOAT, 2),
+      Renderer::VBOSpec(*mesh_data->bone_indices(), 5, GL_BYTE, 4),
+      Renderer::VBOSpec(*mesh_data->bone_weights(), 6, GL_FLOAT, 4),
     },
     Renderer::EBOSpec(*mesh_data->vertex_indices()));
 
@@ -119,15 +127,21 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
     if (maybe_alpha_colour) {
       shader->SetUniform("alpha_colour"_name, *maybe_alpha_colour);
-      shader->SetUniform("use_alpha_colour", 1);
+      shader->SetUniform("use_alpha_colour"_name, 1);
     } else {
-      shader->SetUniform("use_alpha_colour", 0);
+      shader->SetUniform("use_alpha_colour"_name, 0);
     }
 
     // Texture unit 0 for the base texture.
     if (textures.base_texture.empty()) {
       LOG_ERROR("No base texture. Skipping mesh.");
       return;
+    }
+
+    shader->SetUniform("skinning"_name, data.skinned ? 1 : 0);
+
+    if (data.skinned) {
+      shader->SetUniform("bone_transforms"_name, bone_transforms);
     }
 
     TextureManager::GetInstance()->UseTextureSet(shader, textures);
@@ -149,7 +163,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 }
 
 Actor::Actor(const ActorTemplate* actor_template)
-    : template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
+    : state_(ActorState::kIdle), template_(actor_template), position_(0.0f, 0.0f, 0.0f), scale_(1.0f) {
   for (int group = 0; group < template_->NumGroups(); ++group) {
     std::vector<float> probability_densities;
     for (int variant = 0; variant < template_->NumVariants(group); ++variant) {
@@ -159,6 +173,39 @@ Actor::Actor(const ActorTemplate* actor_template)
     std::discrete_distribution dist(probability_densities.begin(), probability_densities.end());
 
     variant_selections_.push_back(dist(actor_template->Rng()));
+  }
+
+  animation_specs_ = template_->AnimationSpecs(this);
+}
+
+void Actor::Update() {
+  if (!active_animation_ || active_animation_->Done()) {
+    // We are out of animation. See if we can start a new one.
+    if (state_ == ActorState::kIdle) {
+      if (animation_specs_.find("Idle") != animation_specs_.end()) {
+        const auto& candidates = animation_specs_["Idle"];
+        const auto& animation_template = AnimationTemplate::GetTemplate(candidates[0]->path()->str());
+        active_animation_ = animation_template.MakeAnimation();
+        active_animation_->Start();
+        LOG_INFO("Starting new animation: %", candidates[0]->path()->str());
+      }
+    }
+  }
+  if (active_animation_) {
+    auto to_bone_space = template_->BindPoseInverses(this);
+    auto to_frame = active_animation_->Update();
+
+    if (to_bone_space.size() != to_frame.size()) {
+      LOG_ERROR("Bind pose inverse and animation frame joint count mismatch: % != %",
+                to_bone_space.size(), to_frame.size());
+      return;
+    }
+
+    bone_transforms_.resize(to_bone_space.size());
+
+    for (std::size_t joint = 0; joint != to_bone_space.size(); ++joint) {
+      bone_transforms_[joint] = to_frame[joint] * to_bone_space[joint];
+    }
   }
 }
 
@@ -253,7 +300,8 @@ void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, con
   }
 
   RenderMesh(mesh_path, textures, context->projection * context->view,
-             model * attachpoints["root"], maybe_alpha_colour, context);
+             model * attachpoints["root"], maybe_alpha_colour,
+             actor->BoneTransforms(), context);
 
   for (auto& [point, prop_actors] : *(actor->Props())) {
     auto it = attachpoints.find(point);
@@ -264,4 +312,49 @@ void ActorTemplate::Render(Renderable::RenderContext* context, Actor* actor, con
       }
     }
   }
+}
+
+std::map<std::string, std::vector<const data::AnimationSpec*>> ActorTemplate::AnimationSpecs(
+    const Actor* actor) const {
+  std::map<std::string, std::vector<const data::AnimationSpec*>> ret;
+  for (int group = 0; group < actor->NumGroups(); ++group) {
+    const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(actor->VariantSelection(group));
+    for (const auto* animation_spec : *(variant->animations())) {
+      std::string name = animation_spec->name()->str();
+      auto it = ret.find(name);
+      if (it == ret.end()) {
+        it = ret.insert(std::make_pair(name, std::vector<const data::AnimationSpec*>())).first;
+      }
+      it->second.push_back(animation_spec);
+    }
+  }
+  return ret;
+}
+
+std::vector<glm::mat4> ActorTemplate::BindPoseInverses(const Actor* actor) const {
+  std::string mesh_path;
+  for (int group = 0; group < actor->NumGroups(); ++group) {
+    const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(actor->VariantSelection(group));
+    if (variant->mesh_path() && !variant->mesh_path()->str().empty()) {
+      mesh_path = variant->mesh_path()->str();
+      break;
+    }
+  }
+  if (mesh_path.empty()) {
+    return {};
+  }
+  static std::unordered_map<std::string, std::vector<glm::mat4>> cache;
+  auto it = cache.find(mesh_path);
+  if (it == cache.end()) {
+    auto mesh_file_content = ReadWholeFile(std::string(kMeshPathPrefix) + mesh_path);
+    const auto* mesh = data::GetMesh(mesh_file_content.data());
+    std::size_t num_joints = mesh->bind_pose_transforms()->size() / 7;
+    std::vector<glm::mat4> ret(num_joints);
+    for (std::size_t joint = 0; joint < num_joints; ++joint) {
+      const float* joint_ptr = mesh->bind_pose_transforms()->data() + 7 * joint;
+      ret[joint] = glm::inverse(ReadBoneTransform(joint_ptr).ToMatrix());
+    }
+    it = cache.insert({mesh_path, ret}).first;
+  }  
+  return it->second;
 }

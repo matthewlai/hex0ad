@@ -463,8 +463,10 @@ std::vector<float> GetData(FCDGeometryPolygonsInput* input,
 }
 
 struct VertexData {
-  // 3x position, 3x normal, 3x tangent, 2x UV, 2x ambient occlusion UV, 4x bone ids, 4x bone weights.
-  float data[21];
+  // 3x position, 3x normal, 3x tangent, 2x UV, 2x ambient occlusion UV, kMaxSkinInfluences bone ids, kMaxSkinInfluences bone weights.
+  // We need to store everything in one big array because we need to be able to sort them efficiently for deduplication.
+  // bone IDs should fit in the integer parts of float.
+  float data[13 + kMaxSkinInfluences * 2];
 
   // Convenience functions.
   VertexData() { std::fill(std::begin(data), std::end(data), 0.0f); }
@@ -474,7 +476,7 @@ struct VertexData {
   float* UV0() { return &data[9]; }
   float* UV1() { return &data[11]; }
   float* BoneId(int i) { return &data[13 + i]; }
-  float* BoneWeight(int i) { return &data[17 + i]; }
+  float* BoneWeight(int i) { return &data[13 + kMaxSkinInfluences + i]; }
 
   bool operator<(const VertexData& other) const {
     return std::lexicographical_compare(std::begin(data), std::end(data),
@@ -495,7 +497,7 @@ struct VertexData {
   void SetTangent(float* x) { std::copy(x, x + 3, Tangent()); }
   void SetUV0(float* x) { std::copy(x, x + 2, UV0()); }
   void SetUV1(float* x) { std::copy(x, x + 2, UV1()); }
-  void SetBoneId(int i, float id) { *(BoneId(i)) = id; }
+  void SetBoneId(int i, uint8_t id) { *(BoneId(i)) = static_cast<float>(id); }
   void SetBoneWeight(int i, float weight) { *(BoneWeight(i)) = weight; }
 
   void ApplyTransform(const FMMatrix44& model_matrix) {
@@ -521,6 +523,33 @@ struct IndexedVertexData {
   std::vector<VertexData> vds;
   std::vector<uint32_t> indices;
 };
+
+struct RawBoneTransform {
+	float translation[3];
+	float orientation[4];
+};
+
+// Applies transform to each transformation in bones, and optionally change the coordinate system to z-up (from y-up).
+// Logic from: https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/CommonConvert.cpp#L397
+// But we want a right-handed z-up system.
+void TransformBones(std::vector<RawBoneTransform>& bones, const FMMatrix44& transform, bool yup) {
+  for (size_t i = 0; i < bones.size(); ++i)	{
+    FMVector3 trans(bones[i].translation, 0);
+    trans = transform.TransformCoordinate(trans);
+    bones[i].translation[0] = trans.x;
+    bones[i].translation[1] = trans.y;
+    bones[i].translation[2] = trans.z;
+
+    if (yup) {
+      // Swap trans.y and trans.z
+      std::swap(bones[i].translation[1], bones[i].translation[2]);
+
+      // Change xyzw to xzyw, but negating new Y to preserve chirality.
+      std::swap(bones[i].orientation[1], bones[i].orientation[2]);
+      bones[i].orientation[1] *= -1.0f;
+    }
+  }
+}
 
 // Find duplicates, and switch to an indexed representation after de-duplication.
 IndexedVertexData Reindex(std::vector<VertexData>&& vds) {
@@ -630,6 +659,14 @@ class SkeletonSelection {
       return std::nullopt;
     } else {
       return it->second;
+    }
+  }
+
+  std::size_t GetBoneCount() const {
+    if (name_to_id_) {
+      return name_to_id_->size();
+    } else {
+      return 0;
     }
   }
 
@@ -775,6 +812,7 @@ void ParseMesh(const std::string& mesh_path) {
   FCDGeometryPolygons* polys = nullptr;
 
   FCDSkinController* skin = nullptr;
+  FCDControllerInstance* controller_instance = nullptr;
 
   std::size_t joint_count = 0;
 
@@ -785,7 +823,7 @@ void ParseMesh(const std::string& mesh_path) {
     polys = PolysFromGeometry(static_cast<FCDGeometry*>(t_instance.instance->GetEntity()));
   } else if (t_instance.instance->GetEntity()->GetType() == FCDEntity::CONTROLLER) {
     LOG_DEBUG("Found skinned geometry");
-    FCDControllerInstance* controller_instance = static_cast<FCDControllerInstance*>(t_instance.instance);
+    controller_instance = static_cast<FCDControllerInstance*>(t_instance.instance);
     FCDController* controller = static_cast<FCDController*>(t_instance.instance->GetEntity());
     skin = controller->GetSkinController();
     if (!skin) {
@@ -868,6 +906,15 @@ void ParseMesh(const std::string& mesh_path) {
 
   auto* positions_indices = polys->FindInput(FUDaeGeometryInput::POSITION)->GetIndices();
 
+  constexpr RawBoneTransform kBoneDefault = {{0, 0, 0}, {0, 0, 0, 1}};
+  std::vector<RawBoneTransform> bind_pose_bones(skeleton.GetBoneCount(), kBoneDefault);
+
+  // We use z-up, so do a rotate if the model is y-up.
+  FMMatrix44 up_transform = FMMatrix44::Identity;
+  if (yup) {
+    up_transform = FMMatrix44::XAxisRotationMatrix(M_PI / 2.0f);
+  }
+
   for (uint64_t vertex = 0; vertex < num_vertices; ++vertex) {
     VertexData* vd = &vertex_datas[vertex];
     vd->SetPosition(&positions_data[vertex * 3]);
@@ -880,18 +927,93 @@ void ParseMesh(const std::string& mesh_path) {
     }
 
     if (skin) {
-      FCDSkinControllerVertex* influences = skin->GetVertexInfluence(positions_indices[vertex]);
-      for (std::size_t i = 0; i < influences->GetPairCount(); ++i) {
-        vd->SetBoneId(i, influences->GetPair(i)->jointIndex);
-        vd->SetBoneWeight(i, influences->GetPair(i)->weight);
+      FCDSkinControllerVertex* vertex_influences = skin->GetVertexInfluence(positions_indices[vertex]);
+      std::vector<std::pair<int32_t, float>> influences;
+      for (std::size_t i = 0; i < vertex_influences->GetPairCount(); ++i) {
+        auto* inf = vertex_influences->GetPair(i);
+        influences.push_back(std::make_pair(inf->jointIndex, inf->weight));
       }
-    }
-  }
 
-  // We use z-up, so do a rotate if the model is y-up.
-  FMMatrix44 up_transform = FMMatrix44::Identity;
-  if (yup) {
-    up_transform = FMMatrix44::XAxisRotationMatrix(M_PI / 2.0f);
+      for (auto& [bone, weight] : influences) {
+        // If bone is -1, we change it to the virtual bind pose bone above. See:
+        // https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/PMDConvert.cpp#L276
+        if (bone == -1) {
+          bone = joint_count;
+        } else {
+          if (bone > 0xFE) {
+            LOG_ERROR("Bone % is above max 254", bone);
+            throw std::runtime_error("Bone out of bound");
+          }
+
+          // Remap the bone index with skeleton lookup.
+          FCDSceneNode* joint = nullptr;
+          if (static_cast<std::size_t>(bone) < controller_instance->GetJointCount()) {
+            joint = controller_instance->GetJoint(bone);
+          }
+
+          if (!joint) {
+            LOG_ERROR("Vertex refers to non-existent joint idx %, max %", bone, (controller_instance->GetJointCount() - 1));
+            throw std::runtime_error("Non-existent joint");
+          }
+
+          auto maybe_bone_id = skeleton.FindBoneId(joint->GetName().c_str());
+          if (!maybe_bone_id) {
+            LOG_ERROR("Bone % not found in skeleton %", joint->GetName().c_str(), skeleton.skeleton->id());
+            throw std::runtime_error("Non-existent joint");
+          }
+
+          bone = *maybe_bone_id;
+        }
+      }
+
+      // If we have no influences, add one that just drives the vertex to bind pose - a "virtual bone" at
+      // end of the joints list (index joint_count).
+      if (influences.empty()) {
+        influences.push_back(std::make_pair(joint_count, 1.0f));
+      }
+
+      // Pad to max skin influences.
+      while (influences.size() < kMaxSkinInfluences) {
+        influences.push_back(std::make_pair(0xFF, 0.0f));
+      }
+
+      for (std::size_t i = 0; i < influences.size(); ++i) {
+        const auto& [bone, weight] = influences[i];
+        vd->SetBoneId(i, bone);
+        vd->SetBoneWeight(i, weight);
+      }
+
+      // Now we need to convert bind poses to bone transforms (so the renderer can add it as the "virtual bone"
+      // while rendering this mesh.
+			for (size_t i = 0; i < joint_count; ++i) {
+				FCDSceneNode* joint = controller_instance->GetJoint(i);
+
+				auto maybe_bone_id = skeleton.FindBoneId(joint->GetName().c_str());
+				if (!maybe_bone_id) {
+					// unrecognised joint - it's probably just a prop point
+					// or something, so ignore it
+					continue;
+				}
+
+				FMMatrix44 bind_pose = skin->GetJoint(i)->GetBindPoseInverse().Inverted();
+
+				HMatrix matrix;
+				memcpy(matrix, bind_pose.Transposed().m, sizeof(matrix));
+					// set matrix = bindPose^T, to match what decomp_affine wants
+
+				AffineParts parts;
+				decomp_affine(matrix, &parts);
+
+				RawBoneTransform b = {
+					{ parts.t.x, parts.t.y, parts.t.z },
+					{ parts.q.x, parts.q.y, parts.q.z, parts.q.w }
+				};
+
+				bind_pose_bones[*maybe_bone_id] = b;
+			}
+
+      TransformBones(bind_pose_bones, t_instance.transform, yup);
+    }
   }
 
   IndexedVertexData ivd = Reindex(std::move(vertex_datas));
@@ -942,6 +1064,33 @@ void ParseMesh(const std::string& mesh_path) {
     }
   }
 
+  std::vector<uint8_t> bone_indices(ivd.vds.size() * kMaxSkinInfluences);
+  if (skin) {
+    for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+      for (int bone = 0; bone < kMaxSkinInfluences; ++bone) {
+        bone_indices[i * kMaxSkinInfluences + bone] = static_cast<uint8_t>(*ivd.vds[i].BoneId(bone));
+      }
+    }
+  }
+
+  std::vector<float> bone_weights(ivd.vds.size() * kMaxSkinInfluences);
+  if (skin) {
+    for (uint32_t i = 0; i < ivd.vds.size(); ++i) {
+      for (int bone = 0; bone < kMaxSkinInfluences; ++bone) {
+        bone_weights[i * kMaxSkinInfluences + bone] = *ivd.vds[i].BoneWeight(bone);
+      }
+    }
+  }
+
+  // bind_pose_transform is size 0 if not skinned.
+  std::vector<float> bind_pose_transforms;
+  if (skin) {
+    for (const auto& transform : bind_pose_bones) {
+      std::copy(transform.translation, transform.translation + 3, std::back_inserter(bind_pose_transforms));
+      std::copy(transform.orientation, transform.orientation + 4, std::back_inserter(bind_pose_transforms));
+    }
+  }
+
   std::vector<AttachmentPoint> attachment_points;
 
   AddAttachmentPoints(root, up_transform, &attachment_points);
@@ -968,6 +1117,9 @@ void ParseMesh(const std::string& mesh_path) {
     /*tangents=*/builder.CreateVector(tangents),
     /*tex_coords=*/builder.CreateVector(tex_coords),
     /*ao_tex_coords=*/builder.CreateVector(ao_tex_coords),
+    /*bone_indices=*/builder.CreateVector(bone_indices),
+    /*bone_weights=*/builder.CreateVector(bone_weights),
+    /*bind_pose_transforms=*/builder.CreateVector(bind_pose_transforms),
     /*attachment_point_names=*/builder.CreateVectorOfStrings(attachment_point_names),
     /*attachment_point_transforms=*/builder.CreateVector(attachment_point_transforms)
     );
@@ -1099,11 +1251,6 @@ std::pair<float, float> GetAnimationRange(
   return std::make_pair(start, end);
 }
 
-struct BoneTransform {
-	float translation[3];
-	float orientation[4];
-};
-
 void EvaluateAnimations(FCDSceneNode& node, float time)	{
   for (size_t i = 0; i < node.GetTransformCount(); ++i)
   {
@@ -1115,28 +1262,6 @@ void EvaluateAnimations(FCDSceneNode& node, float time)	{
 
   for (size_t i = 0; i < node.GetChildrenCount(); ++i)
     EvaluateAnimations(*node.GetChild(i), time);
-}
-
-// Applies transform to each transformation in bones, and optionally change the coordinate system to z-up (from y-up).
-// Logic from: https://github.com/0ad/0ad/blob/aee0a07666750f6aa0f56561e8113aac43df813e/source/collada/CommonConvert.cpp#L397
-// But we want a right-handed z-up system.
-void TransformBones(std::vector<BoneTransform>& bones, const FMMatrix44& transform, bool yup) {
-  for (size_t i = 0; i < bones.size(); ++i)	{
-    FMVector3 trans(bones[i].translation, 0);
-    trans = transform.TransformCoordinate(trans);
-    bones[i].translation[0] = trans.x;
-    bones[i].translation[1] = trans.y;
-    bones[i].translation[2] = trans.z;
-
-    if (yup) {
-      // Swap trans.y and trans.z
-      std::swap(bones[i].translation[1], bones[i].translation[2]);
-
-      // Change xyzw to xzyw, but negating new Y to preserve chirality.
-      std::swap(bones[i].orientation[1], bones[i].orientation[2]);
-      bones[i].orientation[1] *= -1.0f;
-    }
-  }
 }
 
 // The logic here is copied from:
@@ -1211,13 +1336,13 @@ void SaveAnimation(const std::string& animation_path) {
       throw std::runtime_error("Skeleton has too many bones");
     }
 
-    std::vector<BoneTransform> bone_transforms;
+    std::vector<RawBoneTransform> bone_transforms;
 
     for (std::size_t frame = 0; frame < frame_count; ++frame) {
       float time = time_start + kFrameLength * frame;
 
-      constexpr BoneTransform kBoneDefault = {{0, 0, 0}, {0, 0, 0, 1}};
-      std::vector<BoneTransform> frame_bone_transforms(bone_count, kBoneDefault);
+      constexpr RawBoneTransform kBoneDefault = {{0, 0, 0}, {0, 0, 0, 1}};
+      std::vector<RawBoneTransform> frame_bone_transforms(bone_count, kBoneDefault);
 
       // Move the model into the new animated pose
       // (We can't tell exactly which nodes should be animated, so
@@ -1241,13 +1366,13 @@ void SaveAnimation(const std::string& animation_path) {
         AffineParts parts;
         decomp_affine(matrix, &parts);
 
-        BoneTransform b = {{parts.t.x, parts.t.y, parts.t.z},
+        RawBoneTransform b = {{parts.t.x, parts.t.y, parts.t.z},
                            {parts.q.x, parts.q.y, parts.q.z, parts.q.w}};
 
         frame_bone_transforms[*maybe_bone_id] = b;
       }
 
-      // Push frameBoneTransforms onto the back of boneTransforms
+      // Push frameRawBoneTransforms onto the back of RawBoneTransforms
       std::copy(frame_bone_transforms.begin(), frame_bone_transforms.end(),
                 std::back_inserter(bone_transforms));
     }
@@ -1474,8 +1599,8 @@ void MakeActor(const std::string& actor_path) {
           }
           animation_offsets.push_back(data::CreateAnimationSpec(
               builder,
+              /*path=*/builder.CreateString(RemoveExtension(file)),
               /*name=*/builder.CreateString(name),
-              /*file=*/builder.CreateString(RemoveExtension(file)),
               /*speed=*/speed)
           );
         }

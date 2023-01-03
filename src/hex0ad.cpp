@@ -130,6 +130,11 @@ bool main_loop() {
   static uint64_t last_frame_rate_report = GetTimeUs();
   static uint64_t frames_since_last_report = 0;
 
+  // World updates.
+  for (auto& actor : g_state.actors) {
+    actor.Update();
+  }
+
   int mouse_x;
   int mouse_y;
   SDL_GetMouseState(&mouse_x, &mouse_y);

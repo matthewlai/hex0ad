@@ -27,6 +27,18 @@ table Mesh {
   // Size nVertices * 2.
   ao_tex_coords:[float];
 
+  // Bone indices influencing each vertex.
+  // Size nVertices * 4.
+  bone_indices:[ubyte];
+
+  // Bone weights for each bone influencing each vertex.
+  // Size nVertices * 4.
+  bone_weights:[float];
+
+  // Model space bind pose transforms per joint.
+  // Size 7 * nJoints.
+  bind_pose_transforms:[float];
+
   // Attachment points.
   attachment_point_names:[string];
 

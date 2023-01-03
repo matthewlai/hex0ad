@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <string>
 
+#define GLM_ENABLE_EXPERIMENTAL
+#include "glm/ext.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
 #include "logger.h"
@@ -26,6 +28,8 @@ class ShaderProgram {
   // We shouldn't need to check for -1 because glUniform*(-1, ...)
   // is supposed to be silently ignored (no-op). Unfortunately
   // Firefox didn't seem to get the memo, and will return an error.
+  // We don't error out on uniform not found because they are often
+  // optimised out.
   void SetUniform(const NameLiteral& name, GLint x) {
     GLint location = GetUniformLocation(name);
     if (location != -1) {
@@ -83,6 +87,19 @@ class ShaderProgram {
     GLint location = GetUniformLocation(name);
     if (location != -1) {
       glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(x));
+    }
+  }
+
+  void SetUniform(const NameLiteral& name, const std::vector<glm::mat4>& x) {
+    std::vector<float> values(x.size() * 4 * 4);
+    float* write_ptr = values.data();
+    for (const auto& mat : x) {
+      std::copy(glm::value_ptr(mat), glm::value_ptr(mat) + 16, write_ptr);
+      write_ptr += 16;
+    }
+    GLint location = GetUniformLocation(name);
+    if (location != -1) {
+      glUniformMatrix4fv(location, x.size(), GL_FALSE, values.data());
     }
   }
 

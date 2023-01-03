@@ -91,6 +91,18 @@ class Renderer {
     GLenum gl_type;
     int components_per_element;
 
+    bool IsInt() const {
+      static constexpr GLenum kIntTypes[] = {
+        GL_BYTE, GL_UNSIGNED_BYTE, GL_SHORT, GL_UNSIGNED_SHORT, GL_INT, GL_UNSIGNED_INT
+      };
+      for (const auto& t : kIntTypes) {
+        if (t == gl_type) {
+          return true;
+        }
+      }
+      return false;
+    }
+
     template <typename T>
     VBOSpec(const std::vector<T>& buf, int attrib_location_i, GLenum gl_type_i, int components_per_element_i) 
         : data(buf.data()), data_size(buf.size() * sizeof(T)), attrib_location(attrib_location_i), gl_type(gl_type_i),

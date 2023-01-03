@@ -299,7 +299,11 @@ glm::vec3 Renderer::UnProjectToXY(int32_t x, int32_t y) {
     GLuint vbo_id = MakeAndUploadBuf(GL_ARRAY_BUFFER, vbo.data, vbo.data_size);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_id);
     CHECK_GL_ERROR
-    glVertexAttribPointer(vbo.attrib_location, vbo.components_per_element, vbo.gl_type, GL_FALSE, 0, (const void*) 0);
+    if (vbo.IsInt()) {
+      glVertexAttribIPointer(vbo.attrib_location, vbo.components_per_element, vbo.gl_type, 0, (const void*) 0);
+    } else {
+      glVertexAttribPointer(vbo.attrib_location, vbo.components_per_element, vbo.gl_type, GL_FALSE, 0, (const void*) 0);
+    }
     CHECK_GL_ERROR
   }
   GLuint ebo_id = MakeAndUploadBuf(GL_ELEMENT_ARRAY_BUFFER, ebo.data, ebo.data_size);

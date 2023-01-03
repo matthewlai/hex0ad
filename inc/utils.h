@@ -13,6 +13,9 @@
 #include <utility>
 #include <vector>
 
+#include "glm/glm.hpp"
+#include "glm/gtx/quaternion.hpp"
+
 #if defined(_WIN32)
 #define _CRT_RAND_S
 #include <stdlib.h>
@@ -134,6 +137,25 @@ struct NameLiteralHash {
 };
 
 using namespace std::string_literals;
+
+struct BoneTransform {
+  glm::vec3 translation;
+  glm::fquat orientation;
+
+  glm::mat4 ToMatrix() {
+    return glm::translate(glm::mat4(1.0f), translation) * glm::toMat4(orientation);
+  }
+};
+
+inline BoneTransform ReadBoneTransform(const float* data) {
+  BoneTransform bone_transform;
+  bone_transform.translation = glm::vec3(data[0], data[1], data[2]);
+
+  // We store in xyvw, and glm wants wxyz.
+  bone_transform.orientation = glm::fquat(data[6], data[3], data[4], data[5]);
+
+  return bone_transform;
+}
 
 #ifdef HAVE_GLEW
 // For OpenGL debugging. This is adapted from https://learnopengl.com/In-Practice/Debugging

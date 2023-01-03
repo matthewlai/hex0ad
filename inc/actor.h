@@ -13,6 +13,7 @@
 #include "glm/glm.hpp"
 #include "glm/gtc/type_ptr.hpp"
 
+#include "animation.h"
 #include "renderer.h"
 #include "texture_manager.h"
 
@@ -26,7 +27,13 @@ class ActorTemplate;
 // actor instantiated from it.
 class Actor : public Renderable {
  public:
+  enum class ActorState {
+    kIdle,
+  };
+
   Actor(const ActorTemplate* actor_template);
+
+  void Update();
 
   void Render(RenderContext* context) override;
   void Render(RenderContext* context, const glm::mat4& model);
@@ -47,12 +54,21 @@ class Actor : public Renderable {
     return &props_;
   }
 
+  const std::vector<glm::mat4>& BoneTransforms() const { return bone_transforms_; }
+
   Actor(const Actor& other) = delete;
   Actor(Actor&& actor) = default;
 
   virtual ~Actor() {}
 
  private:
+  ActorState state_;
+
+  std::unique_ptr<Animation> active_animation_;
+
+  // AnimationSpecs for the current variant selections.
+  std::map<std::string, std::vector<const data::AnimationSpec*>> animation_specs_;
+
   // Variant selection for each group.
   std::vector<int> variant_selections_;
 
@@ -62,6 +78,8 @@ class Actor : public Renderable {
 
   glm::vec3 position_;
   float scale_;
+
+  std::vector<glm::mat4> bone_transforms_;
 };
 
 // Corresponds to an actor .fbs file, which corresponds to an actor XML.
@@ -81,6 +99,12 @@ class ActorTemplate {
 
   // Render a variant from a group. Props are ignored.
   void Render(Renderable::RenderContext* context, Actor* actor, const glm::mat4& model) const;
+
+  // Get all the animation paths with the actor's current selection of variants.
+  std::map<std::string, std::vector<const data::AnimationSpec*>> AnimationSpecs(const Actor* actor) const;
+
+  // Get all the joint bind pose inverses with the actor's current selection of variants.
+  std::vector<glm::mat4> BindPoseInverses(const Actor* actor) const;
 
   std::mt19937& Rng() const { return *rng_; }
 
