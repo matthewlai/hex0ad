@@ -14,9 +14,22 @@ static constexpr const char* kTestActorPaths[] = {
     "structures/persians/stable_elephant",
 
     "units/athenians/hero_infantry_javelinist_iphicrates",
-    "units/romans/cavalry_javelinist_a_m",
-    "units/spartans/female_citizen",
+    "units/britons/hero_chariot_javelinist_boudicca_m",
+    "units/carthaginians/elephantry_c_m",
+    "units/gauls/hero_infantry_swordsman_brennus",
+    "units/global/ninja_female",
     "units/han/infantry_archer_a",
+    "units/hellenes/healer",
+    "units/iberians/trader",
+    "units/kushites/camel_swordsman_m",
+    "units/macedonians/hero_infantry_pikeman_philip",
+    "units/mauryas/elephantry_archer_e_m",
+    "units/persians/chariot_archer_e_m",
+    "units/ptolemies/ballista_infantry_a",
+    "units/romans/cavalry_javelinist_a_m",
+    "units/seleucids/female_citizen",
+    "units/spartans/helot_female",
+    "units/thebans/siege_fireraiser",
     };
 
 static constexpr const char* kTestTerrainPaths[] = {

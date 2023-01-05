@@ -5,7 +5,7 @@
 #include "platform_includes.h"
 #include "renderer.h"
 
-constexpr static float kGridSize = 5.0f;
+constexpr static float kGridSize = 7.0f;
 
 class Terrain : public Renderable {
  public:
