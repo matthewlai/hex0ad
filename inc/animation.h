@@ -20,8 +20,8 @@ class AnimationTemplate;
 
 class Animation {
  public:
-  Animation(const AnimationTemplate* animation_template, float speed)
-      : template_(animation_template), done_(false), speed_(speed) {}
+  Animation(const AnimationTemplate* animation_template, float speed, const std::string& path)
+      : template_(animation_template), done_(false), speed_(speed), path_(path) {}
 
   void Start(uint64_t time_us) { start_time_us_ = time_us; }
   
@@ -29,6 +29,8 @@ class Animation {
   std::vector<glm::mat4> Update(uint64_t time_us);
 
   bool Done() { return done_; }
+
+  const std::string& Path() const { return path_; }
 
   Animation(const Animation& other) = delete;
   Animation(Animation&&) = default;
@@ -45,6 +47,8 @@ class Animation {
 
   float speed_;
 
+  std::string path_;
+
   uint64_t start_time_us_;
 };
 
@@ -53,12 +57,16 @@ class AnimationTemplate {
  public:
   static AnimationTemplate& GetTemplate(const std::string& animation_path);
 
-  std::unique_ptr<Animation> MakeAnimation(float speed) const { return std::make_unique<Animation>(this, speed); }
+  std::unique_ptr<Animation> MakeAnimation(float speed) const {
+    return std::make_unique<Animation>(this, speed, animation_data_->path()->str());
+  }
 
   std::string Name() const { return animation_data_->path()->str(); }
 
   // Duration of the animation in seconds.
   float Duration() const { return animation_data_->frame_time() * animation_data_->num_frames(); }
+
+  std::string Path() const { return animation_data_->path()->str(); }
 
   std::vector<glm::mat4> GetFrame(float normalised_time) const;
 

@@ -173,43 +173,89 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   return it->second;
 }
 
-Actor::Actor(const ActorTemplate* actor_template)
-    : state_(ActorState::kIdle), template_(actor_template), position_(0.0f, 0.0f, 0.0f), rotation_rad_(0.0f), scale_(1.0f) {
+Actor::Actor(const ActorTemplate* actor_template, const std::set<std::string>& existing_variant_names)
+    : state_(ActorState::kIdle), variant_names_(existing_variant_names), template_(actor_template),
+      position_(0.0f, 0.0f, 0.0f), rotation_rad_(0.0f), scale_(1.0f) {
+  // If we select a named variant (eg. because it also has a >0 frequency), we enable that variant when we encounter it again
+  // while selecting variants for props. For example, a javelinist may have a "Javelinist-Horse" variant with frequency=1 for
+  // animation, and that means when we select variants for props, we also need to select variants named the same (even if they
+  // don't have frequency).
+  std::vector<std::string> selected_names;
   for (int group = 0; group < template_->NumGroups(); ++group) {
     std::vector<float> probability_densities;
+    std::optional<int> forced_selection = std::nullopt;
     for (int variant = 0; variant < template_->NumVariants(group); ++variant) {
       probability_densities.push_back(template_->VariantFrequency(group, variant));
+      std::string name = template_->VariantName(group, variant);
+      if (!name.empty() && variant_names_.contains(name)) {
+        forced_selection = variant;
+      }
     }
 
-    std::discrete_distribution dist(probability_densities.begin(), probability_densities.end());
+    int selected_idx = 0;
+    if (forced_selection.has_value()) {
+      selected_idx = *forced_selection;
+    } else {
+      std::discrete_distribution dist(probability_densities.begin(), probability_densities.end());
+      selected_idx = dist(actor_template->Rng());
+    }
 
-    variant_selections_.push_back(dist(actor_template->Rng()));
+    variant_selections_.push_back(selected_idx);
+
+    std::string selected_variant_name = template_->VariantName(group, selected_idx);
+    if (!selected_variant_name.empty()) {
+      variant_names_.insert(selected_variant_name);
+    }
   }
 
   animation_specs_ = template_->AnimationSpecs(this);
 }
 
-void Actor::Update(uint64_t time_us) {
+void Actor::Update(uint64_t time_us, std::map<std::string, std::shared_ptr<Animation>>& existing_animations) {
   if (!active_animation_ || active_animation_->Done()) {
     // We are out of animation. See if we can start a new one.
+    active_animation_.reset();
+    const std::vector<const data::AnimationSpec*>* candidates = nullptr;
     if (state_ == ActorState::kIdle) {
-      if (animation_specs_.find("Idle") != animation_specs_.end()) {
-        const auto& candidates = animation_specs_["Idle"];
-        const auto& spec = candidates[0];
-        const auto& animation_template = AnimationTemplate::GetTemplate(spec->path()->str());
+      if (animation_specs_.find("IDLE") != animation_specs_.end()) {
+        candidates = &animation_specs_["IDLE"];
+      }
+    }
+
+    if (candidates) {
+      // First, see if there's any candidate within existing_animations. If so, use that.
+      for (const auto* candidate : *candidates) {
+        auto it = existing_animations.find(candidate->path()->str());
+        if (it != existing_animations.end()) {
+          active_animation_ = it->second;
+          break;
+        }
+      }
+
+      // If not, we get to pick and start a new one.
+      if (!active_animation_) {
+        std::vector<float> weights(candidates->size());
+        for (std::size_t i = 0; i < candidates->size(); ++i) {
+          weights[i] = (*candidates)[i]->frequency();
+        }
+        std::discrete_distribution<> dist(weights.begin(), weights.end());
+        const data::AnimationSpec* spec = (*candidates)[dist(template_->Rng())];
+        const AnimationTemplate& animation_template = AnimationTemplate::GetTemplate(spec->path()->str());
         active_animation_ = animation_template.MakeAnimation(spec->speed());
         active_animation_->Start(time_us);
-        LOG_INFO("Starting new animation: %", candidates[0]->path()->str());
+        LOG_DEBUG("Starting new animation: % (%)", spec->path()->str(), template_->Name());
       }
     }
   }
+
   if (active_animation_) {
     bone_transforms_ = active_animation_->Update(time_us);
+    existing_animations[active_animation_->Path()] = active_animation_;
   }
 
   for (auto& [point, props] : props_) {
     for (auto& prop : props) {
-      prop->Update(time_us);
+      prop->Update(time_us, existing_animations);
     }
   }
 }
@@ -234,7 +280,7 @@ void Actor::AddPropIfNotExist(const std::string& attachpoint, const ActorTemplat
       return;
     }
   }
-  props_[attachpoint].push_back(std::unique_ptr<Actor>(new Actor(&actor_template)));
+  props_[attachpoint].push_back(std::unique_ptr<Actor>(new Actor(&actor_template, variant_names_)));
 }
 
 ActorTemplate::ActorTemplate(const std::string& actor_path, std::mt19937* rng)
@@ -362,6 +408,9 @@ std::map<std::string, std::vector<const data::AnimationSpec*>> ActorTemplate::An
     const data::Variant* variant = actor_data_->groups()->Get(group)->variants()->Get(actor->VariantSelection(group));
     for (const auto* animation_spec : *(variant->animations())) {
       std::string name = animation_spec->name()->str();
+      std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+        return std::toupper(c);
+      });
       auto it = ret.find(name);
       if (it == ret.end()) {
         it = ret.insert(std::make_pair(name, std::vector<const data::AnimationSpec*>())).first;
@@ -396,6 +445,6 @@ std::vector<glm::mat4> ActorTemplate::BindPoseInverses(const Actor* actor) const
       ret[joint] = ReadBoneTransform(joint_ptr).ToInvMatrix();
     }
     it = cache.insert({mesh_path, ret}).first;
-  }  
+  }
   return it->second;
 }

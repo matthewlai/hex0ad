@@ -87,6 +87,7 @@ ifeq ($(EM_BUILD), 1)
 	CXXFLAGS = -std=gnu++20 $(PORTS) $(OPT)
 	LDFLAGS =  $(PORTS) -s WASM=1 -s ALLOW_MEMORY_GROWTH=1
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
+	LDFLAGS += --profiling-funcs -s MIN_WEBGL_VERSION=2
 	LDFLAGS += --preload-file assets --preload-file shaders
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html

@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <random>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -31,9 +32,18 @@ class Actor : public Renderable {
     kIdle,
   };
 
-  Actor(const ActorTemplate* actor_template);
+  Actor(const ActorTemplate* actor_template, const std::set<std::string>& existing_variant_names = {});
 
-  void Update(uint64_t time_us);
+  // Update the actor's animation state, and if animation is done, start the next one.
+  // When starting a new animation, preferentially reuse existing animations passed on
+  // from parent actors (this ensures that, for example, horses and their manes have the
+  // same animation state).
+  void Update(uint64_t time_us,
+              std::map<std::string, std::shared_ptr<Animation>>& existing_animations);
+  void Update(uint64_t time_us) {
+    std::map<std::string, std::shared_ptr<Animation>> existing;
+    Update(time_us, existing);
+  }
 
   void Render(RenderContext* context) override;
   void Render(RenderContext* context, const glm::mat4& model);
@@ -65,13 +75,18 @@ class Actor : public Renderable {
  private:
   ActorState state_;
 
-  std::unique_ptr<Animation> active_animation_;
+  std::shared_ptr<Animation> active_animation_;
 
   // AnimationSpecs for the current variant selections.
   std::map<std::string, std::vector<const data::AnimationSpec*>> animation_specs_;
 
   // Variant selection for each group.
   std::vector<int> variant_selections_;
+
+  // If we have selected variants with names, we pass them down when creating children (props),
+  // so we can select the same named variants when available. This is important for unit animation
+  // sync (eg. horse and horse hair need to have the same variant as the unit).
+  std::set<std::string> variant_names_;
 
   std::map<std::string, std::vector<std::unique_ptr<Actor>>> props_;
 
@@ -99,6 +114,9 @@ class ActorTemplate {
   int NumVariants(int group) const { return actor_data_->groups()->Get(group)->variants()->size(); }
   float VariantFrequency(int group, int variant) const {
     return actor_data_->groups()->Get(group)->variants()->Get(variant)->frequency();
+  }
+  std::string VariantName(int group, int variant) const {
+    return actor_data_->groups()->Get(group)->variants()->Get(variant)->name()->str();
   }
 
   // Render a variant from a group. Props are ignored.

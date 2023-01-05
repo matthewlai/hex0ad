@@ -20,6 +20,7 @@ table AnimationSpec {
   path:string;
   name:string;
   speed:float;
+  frequency:int;
 }
 
 // Variants with frequency > 0 may be randomly selected.

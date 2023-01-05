@@ -1412,7 +1412,7 @@ void SaveAnimation(const std::string& animation_path) {
     flatbuffers::FlatBufferBuilder builder(kFlatBuilderInitSize);
     auto animation = data::CreateAnimation(
       builder,
-      /*path=*/builder.CreateString(output_path),
+      /*path=*/builder.CreateString(RemoveExtension(animation_path)),
       /*frame_time=*/kFrameLength,
       /*num_bones=*/bone_count,
       /*num_frames=*/frame_count,
@@ -1614,6 +1614,7 @@ void MakeActor(const std::string& actor_path) {
           int int_speed = animation.ToElement()->IntAttribute("speed", 0);
           // See https://github.com/0ad/0ad/blob/412f1d0da275a12df16e140fca7523590e5f7cfe/source/graphics/ObjectBase.cpp#L310
           float speed = int_speed > 0 ? (int_speed / 100.0f) : 1.0f;
+          int frequency = animation.ToElement()->IntAttribute("frequency", 1);
           if (file != "") {
             EnqueueAnimation(file);
           }
@@ -1621,7 +1622,8 @@ void MakeActor(const std::string& actor_path) {
               builder,
               /*path=*/builder.CreateString(RemoveExtension(file)),
               /*name=*/builder.CreateString(name),
-              /*speed=*/speed)
+              /*speed=*/speed,
+              /*frequency=*/frequency)
           );
         }
       }
