@@ -110,6 +110,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 
     data.shadow_vao_id = Renderer::MakeVAO({
       Renderer::VBOSpec(*mesh_data->vertices(), 0, GL_FLOAT, 3),
+      Renderer::VBOSpec(*mesh_data->bone_indices(), 1, GL_BYTE, 4),
+      Renderer::VBOSpec(*mesh_data->bone_weights(), 2, GL_FLOAT, 4),
     },
     Renderer::EBOSpec(*mesh_data->vertex_indices()));
 
@@ -127,6 +129,12 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   shader->SetUniform("mvp"_name, mvp);
 
   Renderable::SetLightParams(context, shader);
+
+  shader->SetUniform("skinning"_name, data.skinned ? 1 : 0);
+
+  if (data.skinned) {
+    shader->SetUniform("bone_transforms"_name, bone_transforms);
+  }
 
   if (shadow_pass) {
     Renderer::UseVAO(data.shadow_vao_id);
@@ -151,12 +159,6 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     if (textures.base_texture.empty()) {
       LOG_ERROR("No base texture. Skipping mesh.");
       return;
-    }
-
-    shader->SetUniform("skinning"_name, data.skinned ? 1 : 0);
-
-    if (data.skinned) {
-      shader->SetUniform("bone_transforms"_name, bone_transforms);
     }
 
     TextureManager::GetInstance()->UseTextureSet(shader, textures);

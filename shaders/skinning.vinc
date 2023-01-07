@@ -1,0 +1,60 @@
+// 256 = 4096 components. GL_MAX_VERTEX_UNIFORM_COMPONENTS = 4096 on a MacBook.
+// Only 1024 is guaranteed, so we really should be using a uniform block instead.
+// TODO: switch to UBO for bone transforms.
+const int kMaxBones = 192;
+
+const int kMaxBoneInfluences = 4;
+const int kNoInfluenceBone = 255;
+
+uniform int skinning;
+uniform mat4 bone_transforms[kMaxBones];
+
+struct SkinnedResult {
+  vec4 position;
+  vec3 normal;
+  vec3 tangent;
+};
+
+SkinnedResult MaybeSkinPositionNormalTangent(vec3 position_in, vec3 normal_in, vec3 tangent_in, ivec4 bone_ids, vec4 bone_weights) {
+  SkinnedResult ret;
+  ret.position = vec4(0.0f);
+  ret.normal = vec3(0.0f);
+  ret.tangent = vec3(0.0f);
+
+  if (skinning != 0) {
+    for (int influence = 0; influence < kMaxBoneInfluences; ++influence) {
+      if (bone_ids[influence] == kNoInfluenceBone) {
+        continue;
+      }
+      mat4 bone_transform = bone_transforms[bone_ids[influence]];
+      float weight = bone_weights[influence];
+
+      ret.position += weight * (bone_transform * vec4(position_in, 1.0f));
+      ret.normal += weight * (mat3(bone_transform) * normal_in);
+      ret.tangent += weight * (mat3(bone_transform) * tangent_in);
+    }
+  } else {
+    ret.position = vec4(position_in, 1.0f);
+    ret.normal = normal_in;
+    ret.tangent = tangent_in;
+  }
+  return ret;
+}
+
+vec4 MaybeSkinPosition(vec3 position_in, ivec4 bone_ids, vec4 bone_weights) {
+  if (skinning != 0) {
+    vec4 ret = vec4(0.0f);
+    for (int influence = 0; influence < kMaxBoneInfluences; ++influence) {
+      if (bone_ids[influence] == kNoInfluenceBone) {
+        continue;
+      }
+      mat4 bone_transform = bone_transforms[bone_ids[influence]];
+      float weight = bone_weights[influence];
+
+      ret += weight * (bone_transform * vec4(position_in, 1.0f));
+    }
+    return ret;
+  } else {
+    return vec4(position_in, 1.0f);
+  }
+}
