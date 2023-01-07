@@ -21,6 +21,10 @@ namespace {
 static constexpr const char* kActorPathPrefix = "assets/art/actors/";
 static constexpr const char* kMeshPathPrefix = "assets/art/meshes/";
 
+// Used to calculate walking animation speed. See:
+// https://trac.wildfiregames.com/wiki/AnimationSync
+static constexpr float kDefaultWalkingSpeed = 7.0f;
+
 // Data about a mesh that has been uploaded to the GPU (used at least once).
 struct MeshGPUData {
   ShaderProgram* shader;
@@ -174,7 +178,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
 }
 
 Actor::Actor(const ActorTemplate* actor_template, const std::set<std::string>& existing_variant_names)
-    : state_(ActorState::kIdle), variant_names_(existing_variant_names), template_(actor_template),
+    : state_(ActorState::kWalking), variant_names_(existing_variant_names), template_(actor_template),
       position_(0.0f, 0.0f, 0.0f), rotation_rad_(0.0f), scale_(1.0f) {
   // If we select a named variant (eg. because it also has a >0 frequency), we enable that variant when we encounter it again
   // while selecting variants for props. For example, a javelinist may have a "Javelinist-Horse" variant with frequency=1 for
@@ -216,10 +220,15 @@ void Actor::Update(uint64_t time_us, std::map<std::string, std::shared_ptr<Anima
     // We are out of animation. See if we can start a new one.
     active_animation_.reset();
     const std::vector<const data::AnimationSpec*>* candidates = nullptr;
+    std::string animation_type = "IDLE";
     if (state_ == ActorState::kIdle) {
-      if (animation_specs_.find("IDLE") != animation_specs_.end()) {
-        candidates = &animation_specs_["IDLE"];
-      }
+    } else if (state_ == ActorState::kWalking) {
+      animation_type = "WALK";
+    }
+
+    auto it = animation_specs_.find(animation_type);
+    if (it != animation_specs_.end()) {
+      candidates = &(it->second);
     }
 
     if (candidates) {
@@ -241,7 +250,11 @@ void Actor::Update(uint64_t time_us, std::map<std::string, std::shared_ptr<Anima
         std::discrete_distribution<> dist(weights.begin(), weights.end());
         const data::AnimationSpec* spec = (*candidates)[dist(template_->Rng())];
         const AnimationTemplate& animation_template = AnimationTemplate::GetTemplate(spec->path()->str());
-        active_animation_ = animation_template.MakeAnimation(spec->speed());
+        float speed_multiplier = 1.0f;
+        if (state_ == ActorState::kWalking) {
+          speed_multiplier = kDefaultWalkingSpeed;
+        }
+        active_animation_ = animation_template.MakeAnimation(spec->speed() * speed_multiplier);
         active_animation_->Start(time_us);
         LOG_DEBUG("Starting new animation: % (%)", spec->path()->str(), template_->Name());
       }
