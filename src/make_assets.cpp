@@ -1109,12 +1109,14 @@ void ParseMesh(const std::string& mesh_path) {
   AttachmentPoint root_pt;
   root_pt.name = "root";
   root_pt.transform = up_transform;
+  root_pt.bone = 0xFF;
   attachment_points.push_back(std::move(root_pt));
 
   // Add The "mesh_root" attachment point, which is "root" plus entity/model transform.
   AttachmentPoint mesh_pt;
   mesh_pt.name = "mesh_root";
   mesh_pt.transform = up_transform * model_transform;
+  mesh_pt.bone = 0xFF;
   attachment_points.push_back(std::move(mesh_pt));
 
   std::vector<std::string> attachment_point_names;
