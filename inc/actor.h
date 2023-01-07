@@ -30,6 +30,7 @@ class Actor : public Renderable {
  public:
   enum class ActorState {
     kIdle,
+    kWalking,
   };
 
   Actor(const ActorTemplate* actor_template, const std::set<std::string>& existing_variant_names = {});
