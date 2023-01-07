@@ -31,7 +31,6 @@ struct MeshGPUData {
   ShaderProgram* shadow_shader;
 
   GLuint vao_id;
-  GLuint shadow_vao_id;
 
   GLsizei num_indices;
   bool skinned;
@@ -108,13 +107,6 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
     },
     Renderer::EBOSpec(*mesh_data->vertex_indices()));
 
-    data.shadow_vao_id = Renderer::MakeVAO({
-      Renderer::VBOSpec(*mesh_data->vertices(), 0, GL_FLOAT, 3),
-      Renderer::VBOSpec(*mesh_data->bone_indices(), 1, GL_BYTE, 4),
-      Renderer::VBOSpec(*mesh_data->bone_weights(), 2, GL_FLOAT, 4),
-    },
-    Renderer::EBOSpec(*mesh_data->vertex_indices()));
-
     data.num_indices = mesh_data->vertex_indices()->size();
     it = mesh_gpu_data_cache.insert(std::make_pair(mesh_file_name, data)).first;
   }
@@ -137,7 +129,7 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
   }
 
   if (shadow_pass) {
-    Renderer::UseVAO(data.shadow_vao_id);
+    Renderer::UseVAO(data.vao_id);
     glDrawElements(GL_TRIANGLES, data.num_indices, GL_UNSIGNED_INT, (const void*) 0);
   } else {
     shader->SetUniform("model"_name, model);

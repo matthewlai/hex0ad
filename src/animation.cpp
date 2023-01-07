@@ -38,7 +38,7 @@ std::vector<glm::mat4> Animation::Update(uint64_t time_us) {
 
 std::vector<glm::mat4> AnimationTemplate::GetFrame(float normalised_time) const {
   // TODO: Special case the interpolation to end at last frame for non-repeating animations.
-  auto num_frames = animation_data_->num_frames();
+  int num_frames = animation_data_->num_frames();
 
   /*
   Example: 2 frame animation, if normalised_time = 0.3

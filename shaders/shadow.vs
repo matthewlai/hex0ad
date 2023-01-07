@@ -1,8 +1,8 @@
 #version 300 es
 
 layout(location = 0) in vec3 v_position;
-layout(location = 1) in ivec4 v_bone_ids;
-layout(location = 2) in vec4 v_bone_weights;
+layout(location = 5) in ivec4 v_bone_ids;
+layout(location = 6) in vec4 v_bone_weights;
 
 // This is mvp from light space.
 uniform mat4 mvp;
