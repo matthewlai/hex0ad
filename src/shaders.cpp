@@ -12,6 +12,9 @@
 #include "platform_includes.h"
 
 namespace {
+
+constexpr const char* kShaderPrefix = "assets/shaders/";
+
 struct ShaderCompileResult {
   GLuint shader = 0;
   bool success = false;
@@ -68,7 +71,7 @@ ShaderCompileResult CompileShader(GLenum shader_type,
   auto includes_begin = std::sregex_iterator(
       source_proc.begin(), source_proc.end(), include_regex);
   for (auto match = includes_begin; match != std::sregex_iterator(); ++match) {
-    replacements[match->str()] = ReadWholeFileString("shaders/"s + match->str(1));
+    replacements[match->str()] = ReadWholeFileString(std::string(kShaderPrefix) + match->str(1));
   }
 
   for (const auto& [find, replace] : replacements) {
@@ -106,8 +109,8 @@ ShaderProgram::ShaderProgram(const std::string& vertex_shader_file_name,
                              const std::string& fragment_shader_file_name) 
   : vertex_shader_file_name_(vertex_shader_file_name),
     fragment_shader_file_name_(fragment_shader_file_name) {
-  std::ifstream vertex_file(vertex_shader_file_name);
-  std::ifstream fragment_file(fragment_shader_file_name);
+  std::ifstream vertex_file(std::string(kShaderPrefix) + vertex_shader_file_name);
+  std::ifstream fragment_file(std::string(kShaderPrefix) + fragment_shader_file_name);
 
   if (!vertex_file) {
     LOG_ERROR("Failed to open vertex shader file: %", vertex_shader_file_name);

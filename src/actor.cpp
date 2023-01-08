@@ -89,8 +89,8 @@ void RenderMesh(const std::string& mesh_file_name, const TextureSet& textures, c
         ReadWholeFile(std::string(kMeshPathPrefix) + mesh_file_name);
     const data::Mesh* mesh_data = data::GetMesh(raw_buffer.data());
     MeshGPUData data;
-    data.shadow_shader = GetShader("shaders/shadow.vs", "shaders/shadow.fs");
-    data.shader = GetShader("shaders/actor.vs", "shaders/actor.fs");
+    data.shadow_shader = GetShader("shadow.vs", "shadow.fs");
+    data.shader = GetShader("actor.vs", "actor.fs");
     data.shader->Activate();
 
     data.skinned = mesh_data->bind_pose_transforms()->size() > 0;

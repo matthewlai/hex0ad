@@ -25,6 +25,8 @@ constexpr static float kZoomSpeed = 1e-5f;
 
 constexpr static int kShadowMapSize = 2048;
 
+constexpr static glm::vec3 kLightPos(200.0f, 0.0f, 100.0f);
+
 constexpr bool kDebugRenderDepth = false;
 }
 
@@ -44,7 +46,7 @@ TestTriangleRenderable::TestTriangleRenderable() {
     2, 1, 0
   };
 
-  simple_shader_ = GetShader("shaders/simple.vs", "shaders/simple.fs");
+  simple_shader_ = GetShader("simple.vs", "simple.fs");
 
   vao_id_ = Renderer::MakeVAO({
     Renderer::VBOSpec(vertices, 0, GL_FLOAT, 3),
@@ -259,15 +261,7 @@ void Renderer::UpdateEyePos(int64_t elapsed_time_us) {
 }
 
 glm::vec3 Renderer::LightPos() {
-  glm::vec3 eye_to_centre = view_centre_ - render_context_.eye_pos;
-  glm::vec3 light_pos = glm::normalize(glm::cross(eye_to_centre, glm::vec3(0.0f, 0.0f, 1.0f))) * glm::length(eye_to_centre) * 2.0f
-      + EyePos();
-  light_pos += glm::vec3(0.0f, 0.0f, 1.3f * render_context_.eye_pos.z);
-
-  // Apply a minimum distance.
-  float distance = std::max(10.0f, glm::length(view_centre_ - light_pos));
-  light_pos = glm::normalize(light_pos - view_centre_) * distance + view_centre_;
-  return light_pos;
+  return kLightPos;
 }
 
 glm::vec3 Renderer::UnProjectToXY(int32_t x, int32_t y) {

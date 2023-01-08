@@ -140,7 +140,7 @@ void Terrain::Render(RenderContext* context) {
     Renderer::EBOSpec(edge_indices));
     edges_num_indices_ = edge_indices.size();
 
-    shader_ = GetShader("shaders/terrain.vs", "shaders/terrain.fs");
+    shader_ = GetShader("terrain.vs", "terrain.fs");
     shader_->Activate();
 
     // Each 0ad tile is 2m x 2m, and a terrain texture is supposed to span 11x11 tiles.

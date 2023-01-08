@@ -55,7 +55,7 @@ void UI::Render(RenderContext* context) {
     texture_ = TextureManager::GetInstance()->MakeColourTexture(
       kGpuTextureWidth, kGpuTextureHeight);
 
-    shader_ = GetShader("shaders/ui.vs", "shaders/ui.fs");
+    shader_ = GetShader("ui.vs", "ui.fs");
 
     if (TTF_Init() < 0) {
       LOG_ERROR("Failed to initialize SDL_ttf: %", TTF_GetError());

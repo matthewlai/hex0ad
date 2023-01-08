@@ -56,8 +56,6 @@ IMAGEQUANT_CFLAGS += -Ithird_party/libimagequant
 
 WEB_FILES=$(WEB_BIN).js $(WEB_BIN).wasm $(WEB_BIN).html $(WEB_BIN).data
 
-SHADERS := $(wildcard shaders/*)
-
 FLATBUFFER_SCHEMAS := $(wildcard fb/*.fbs)
 
 FLATBUFFER_GENERATED_FILES := $(FLATBUFFER_SCHEMAS:fb/%.fbs=fb/%_generated.h)
@@ -88,7 +86,7 @@ ifeq ($(EM_BUILD), 1)
 	LDFLAGS =  $(PORTS) -s WASM=1 -s ALLOW_MEMORY_GROWTH=1
 	LDFLAGS += -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2
 	LDFLAGS += --profiling-funcs -s MIN_WEBGL_VERSION=2
-	LDFLAGS += --preload-file assets --preload-file shaders
+	LDFLAGS += --preload-file assets
 	LDFLAGS += --shell-file em_shell.html
 	DEFAULT_TARGETS = $(WEB_BIN).html
 else
@@ -168,7 +166,7 @@ bin/hex0ad bin/hex0ad.exe: $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o
 clean:
 	-$(Q) rm -f $(DEPS) $(OBJS) $(BINS) $(WEB_FILES) $(FLATBUFFER_GENERATED_FILES)
 
-$(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) $(SHADERS) obj/src/hex0ad.o em_shell.html
+$(WEB_BIN).html : $(filter-out $(BIN_OBJS), $(OBJS)) obj/src/hex0ad.o em_shell.html
 	$(Q) $(CXX) $(CXXFLAGS) $(filter-out $(BIN_OBJS), $(OBJS)) $(@:%.html=obj/src/%.o) -o $@ $(LDFLAGS)
 
 run_web: $(WEB_BIN).html

@@ -89,6 +89,7 @@ vec4 compute_lighting(bool use_alpha_colour, float ao_strength, vec3 ambient_lig
     // TODO: move this matrix multiplication to vertex shader as an optimisation,
     // by doing all the lighting calculations in tangent space.
     // See https://learnopengl.com/Advanced-Lighting/Normal-Mapping
+    // On M1 it doesn't seem to make any difference (normal map enabled vs disabled).
     normal = normalize(tbn * (texture(norm_texture, tex_coords).xyz * 2.0f - 1.0f));
   }
 
