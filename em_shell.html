@@ -48,7 +48,7 @@
   </head>
   <body>
     <hr/>
-    <figure style="overflow:visible;" id="spinner"><div class="spinner"></div><center style="margin-top:0.5em"><strong>emscripten</strong></center></figure>
+    <figure style="overflow:visible;" id="spinner"><div class="spinner"></div><center style="margin-top:0.5em"><strong>HEX0AD</strong></center></figure>
     <div class="emscripten" id="status">Downloading...</div>
     <div class="emscripten">
       <progress value="0" max="100" id="progress" hidden=1></progress>  
@@ -72,6 +72,16 @@
       var statusElement = document.getElementById('status');
       var progressElement = document.getElementById('progress');
       var spinnerElement = document.getElementById('spinner');
+
+      var canvasElement = document.getElementById('canvas');
+      var originalCanvasGetContext = canvasElement.getContext;
+      canvasElement.getContext = function(contextType, contextAttributes)
+      {
+        if (contextAttributes)
+          contextAttributes.antialias = false;
+        
+        return originalCanvasGetContext.call(this, contextType, contextAttributes);
+      };
 
       var Module = {
         preRun: [],
