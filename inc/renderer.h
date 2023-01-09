@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <memory>
+#include <optional>
 
 #include "flatbuffers/flatbuffers.h"
 #include "glm/gtc/matrix_transform.hpp"
@@ -21,7 +22,7 @@ constexpr uint64_t kRenderStatsPeriod = 100000;
 
 constexpr GLint kShadowTextureUnit = 8;
 
-// For Geometry pass output, FXAA pass input.
+// For Geometry pass output, SMAA pass input.
 constexpr GLint kGeometryColourTextureUnit = 9;
 
 enum class RenderPass {
@@ -31,7 +32,7 @@ enum class RenderPass {
   // Standard geometry pass with normal MVP, depth testing enabled, alpha blending disabled.
   kGeometry,
 
-  // FXAA pass (no renderables are requested to render in this pass).
+  // Screen space passes are inserted here (no RenderPass value needed because no renderables are asked to render).
 
   // UI pass with depth testing disabled, and alpha blending enabled. MVP ignored since we will be rendering in NDC directly.
   kUi,
@@ -192,11 +193,29 @@ class Renderer {
   #undef GraphicsSetting
 
  private:
+  class FrameBuffer {
+   public:
+    FrameBuffer(int width, int height, bool have_colour, bool have_depth);
+    void Resize(int width, int height);
+    void Bind();
+
+    GLuint ColourTex() const { return *colour_tex_; }
+    GLuint DepthTex() const { return *depth_tex_; }
+
+    FrameBuffer(const FrameBuffer&) = default;
+    FrameBuffer& operator=(const FrameBuffer&) = default;
+
+   private:
+    GLuint fbo_;
+    std::optional<GLuint> colour_tex_;
+    std::optional<GLuint> depth_tex_;
+  };
+
   glm::vec3 EyePos();
   void UpdateEyePos(int64_t elapsed_time_us);
   glm::vec3 LightPos();
 
-  void DrawQuad();
+  void DrawFullScreen();
 
   static GLuint MakeAndUploadBuf(GLenum binding_target, const void* buf, std::size_t size);
 
@@ -220,15 +239,9 @@ class Renderer {
   int last_window_height_;
 
   // Target of the shadow map pass.
-  GLuint shadow_map_fb_;
-  GLuint shadow_map_texture_;
+  std::optional<FrameBuffer> shadow_fb_;
 
-  // Target of the geometry pass.
-  GLuint geometry_fb_;
-  GLuint geometry_colour_texture_;
-  GLuint geometry_depth_texture_;
-
-  GLuint quad_vao_id_;
+  GLuint fullscreen_vao_id_;
 };
 
 #endif // RENDERER_H

@@ -103,44 +103,21 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     last_window_width_ = window_width;
     last_window_height_ = window_height;
 
-    glGenFramebuffers(1, &shadow_map_fb_);
-    shadow_map_texture_ = TextureManager::GetInstance()->MakeDepthTexture(kShadowMapSize, kShadowMapSize);
-    TextureManager::GetInstance()->BindTexture(shadow_map_texture_, GL_TEXTURE0 + kShadowTextureUnit);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb_);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadow_map_texture_, /*lod=*/0);
-    GLenum no_buffer = GL_NONE;
-    glDrawBuffers(1, &no_buffer);
-    glReadBuffer(GL_NONE);
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-      LOG_ERROR("Framebuffer incomplete");
-    }
-
-    glGenFramebuffers(1, &geometry_fb_);
-    geometry_colour_texture_ = TextureManager::GetInstance()->MakeColourTexture(window_width, window_height);
-    geometry_depth_texture_ = TextureManager::GetInstance()->MakeDepthTexture(window_width, window_height);
-    TextureManager::GetInstance()->BindTexture(geometry_colour_texture_, GL_TEXTURE0 + kGeometryColourTextureUnit);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, geometry_fb_);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, geometry_colour_texture_, /*lod=*/0);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, geometry_depth_texture_, /*lod=*/0);
-    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
-      LOG_ERROR("Framebuffer incomplete");
-    }
+    shadow_fb_ = FrameBuffer(kShadowMapSize, kShadowMapSize, /*have_colour=*/false, /*have_depth=*/true);
+    TextureManager::GetInstance()->BindTexture(shadow_fb_->DepthTex(), GL_TEXTURE0 + kShadowTextureUnit);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+    // Oversized triangle.
     std::vector<float> positions;
     positions.push_back(0.0f); positions.push_back(0.0f); // v0
-    positions.push_back(0.0f); positions.push_back(1.0f); // v1
-    positions.push_back(1.0f); positions.push_back(0.0f); // v2
-    positions.push_back(1.0f); positions.push_back(1.0f); // v3
+    positions.push_back(0.0f); positions.push_back(2.0f); // v1
+    positions.push_back(2.0f); positions.push_back(0.0f); // v2
 
     std::vector<GLuint> indices;
-    indices.push_back(0); indices.push_back(2); indices.push_back(1);
-    indices.push_back(3); indices.push_back(1); indices.push_back(2);
+    indices.push_back(0); indices.push_back(1); indices.push_back(2);
 
-    quad_vao_id_ = MakeVAO({
+    fullscreen_vao_id_ = MakeVAO({
       VBOSpec(positions, 0, GL_FLOAT, 2),
     },
     EBOSpec(indices));
@@ -152,9 +129,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     last_window_width_ = window_width;
     last_window_height_ = window_height;
 
-    // Resize our textures.
-    TextureManager::GetInstance()->ResizeColourTexture(geometry_colour_texture_, window_width, window_height);
-    TextureManager::GetInstance()->ResizeDepthTexture(geometry_depth_texture_, window_width, window_height);
+    // Resize our textures (don't resize shadow map).
   }
   
   uint64_t time_now = GetTimeUs();
@@ -180,7 +155,7 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
   } else {
     glViewport(0, 0, kShadowMapSize, kShadowMapSize);
-    glBindFramebuffer(GL_FRAMEBUFFER, shadow_map_fb_);
+    shadow_fb_->Bind();
     glClear(GL_DEPTH_BUFFER_BIT);
   }
 
@@ -243,9 +218,42 @@ void Renderer::MoveCamera(int32_t x_from, int32_t y_from, int32_t x_to, int32_t 
   view_centre_.z = 0;
 }
 
-void Renderer::DrawQuad() {
-  UseVAO(quad_vao_id_);
-  glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (const void*) 0);
+void Renderer::DrawFullScreen() {
+  UseVAO(fullscreen_vao_id_);
+  glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, (const void*) 0);
+}
+
+Renderer::FrameBuffer::FrameBuffer(int width, int height, bool have_colour, bool have_depth) {
+  glGenFramebuffers(1, &fbo_);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
+  if (have_colour) {
+    colour_tex_ = TextureManager::GetInstance()->MakeColourTexture(width, height);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *colour_tex_, /*lod=*/0);
+  } else {
+    GLenum no_buffer = GL_NONE;
+    glDrawBuffers(1, &no_buffer);
+    glReadBuffer(GL_NONE);
+  }
+  if (have_depth) {
+    depth_tex_ = TextureManager::GetInstance()->MakeDepthTexture(width, height);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, *depth_tex_, /*lod=*/0);
+  }
+  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+      LOG_ERROR("Framebuffer incomplete");
+  }
+}
+
+void Renderer::FrameBuffer::Resize(int width, int height) {
+  if (colour_tex_.has_value()) {
+    TextureManager::GetInstance()->ResizeColourTexture(*colour_tex_, width, height);
+  }
+  if (depth_tex_.has_value()) {
+    TextureManager::GetInstance()->ResizeDepthTexture(*depth_tex_, width, height);
+  }
+}
+
+void Renderer::FrameBuffer::Bind() {
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo_);
 }
 
 glm::vec3 Renderer::EyePos() {
