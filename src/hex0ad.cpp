@@ -68,7 +68,7 @@ SDL_GLContext InitSDL() {
   g_state.window = SDL_CreateWindow(
       "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
       kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
-      /*| SDL_WINDOW_ALLOW_HIGHDPI*/);
+      | SDL_WINDOW_ALLOW_HIGHDPI);
   CHECK_SDL_ERROR_PTR(g_state.window);
   
   auto context = SDL_GL_CreateContext(g_state.window);
