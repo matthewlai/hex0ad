@@ -25,9 +25,7 @@ constexpr static float kZoomSpeed = 1e-5f;
 
 constexpr static int kShadowMapSize = 2048;
 
-constexpr static glm::vec3 kLightPos(200.0f, 0.0f, 100.0f);
-
-constexpr bool kDebugRenderDepth = false;
+constexpr static glm::vec3 kLightPos(150.0f, 0.0f, 75.0f);
 }
 
 /*static*/ void Renderable::SetLightParams(RenderContext* context, ShaderProgram* shader) {
@@ -150,59 +148,52 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
   render_context_.light_pos = LightPos();
 
   // Shadow pass
-  if (kDebugRenderDepth) {
-    glViewport(0, 0, window_width, window_height);
-    glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-  } else {
+  if (UseShadows()) {
     glViewport(0, 0, kShadowMapSize, kShadowMapSize);
     shadow_fb_->Bind();
     glClear(GL_DEPTH_BUFFER_BIT);
+    float light_distance = glm::length(render_context_.light_pos);
+    float shadow_near_z = 0.0f;
+    float shadow_far_z = 4.0f * light_distance + 100.0f;
+    float window_size = 0.5f * light_distance + 10.0f;
+    glm::mat4 light_projection = glm::ortho(-window_size, window_size, -window_size, window_size, shadow_near_z, shadow_far_z);
+    glm::mat4 light_view = glm::lookAt(render_context_.light_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    render_context_.view = light_view;
+    render_context_.projection = light_projection;
+    render_context_.pass = RenderPass::kShadow;
+    for (auto* renderable : renderables) {
+      renderable->Render(&render_context_);
+    }
+    render_context_.light_transform = light_projection * light_view;
   }
 
-  float light_distance = glm::length(render_context_.light_pos);
-  float shadow_near_z = 0.0f;
-  float shadow_far_z = 4.0f * light_distance + 100.0f;
-  float window_size = 0.5f * light_distance + 10.0f;
-  glm::mat4 light_projection = glm::ortho(-window_size, window_size, -window_size, window_size, shadow_near_z, shadow_far_z);
-  glm::mat4 light_view = glm::lookAt(render_context_.light_pos, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-  render_context_.view = light_view;
-  render_context_.projection = light_projection;
-  render_context_.pass = RenderPass::kShadow;
+  // Geometry pass
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glViewport(0, 0, window_width, window_height);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+  glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
+
+  float near_z = 0.1f * eye_distance_;
+  float far_z = 10.0f * eye_distance_;
+  glm::mat4 projection =
+      glm::perspective(glm::radians(kFov), static_cast<float>(window_width) / window_height, near_z, far_z);
+
+  render_context_.view = view;
+  render_context_.projection = projection;
+
+  render_context_.pass = RenderPass::kGeometry;
   for (auto* renderable : renderables) {
     renderable->Render(&render_context_);
   }
 
-  render_context_.light_transform = light_projection * light_view;
+  // UI pass.
+  glEnable(GL_BLEND);
+  glDisable(GL_DEPTH_TEST);
 
-  if (!kDebugRenderDepth) {
-    // Geometry pass
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, window_width, window_height);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    glm::mat4 view = glm::lookAt(render_context_.eye_pos, view_centre_, glm::vec3(0.0f, 0.0f, 1.0f));
-
-    float near_z = 0.1f * eye_distance_;
-    float far_z = 10.0f * eye_distance_;
-    glm::mat4 projection =
-        glm::perspective(glm::radians(kFov), static_cast<float>(window_width) / window_height, near_z, far_z);
-
-    render_context_.view = view;
-    render_context_.projection = projection;
-
-    render_context_.pass = RenderPass::kGeometry;
-    for (auto* renderable : renderables) {
-      renderable->Render(&render_context_);
-    }
-
-    // UI pass.
-    glEnable(GL_BLEND);
-    glDisable(GL_DEPTH_TEST);
-
-    render_context_.pass = RenderPass::kUi;
-    for (auto* renderable : renderables) {
-      renderable->Render(&render_context_);
-    }
+  render_context_.pass = RenderPass::kUi;
+  for (auto* renderable : renderables) {
+    renderable->Render(&render_context_);
   }
 
   ++render_context_.frame_counter;
