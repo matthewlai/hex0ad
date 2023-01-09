@@ -10,10 +10,6 @@ vs_proj/*.filters
 *.DS_Store
 *_generated.h
 *.tmp
-hex0ad.html
-hex0ad.data
-hex0ad.js
-hex0ad.wasm
 vs_proj/x64/Debug/*
 vs_proj/x64/Release/*
 vs_proj/Debug/*
