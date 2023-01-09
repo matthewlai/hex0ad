@@ -257,6 +257,8 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     smaa_data_->blending_shader_->SetUniform("resolution"_name, glm::vec2(window_width, window_height));
     smaa_data_->blending_shader_->SetUniform("colorTex"_name, kGeometryColourTextureUnit);
     smaa_data_->blending_shader_->SetUniform("blendTex"_name, kSmaaWeightsTextureUnit);
+    smaa_data_->blending_shader_->SetUniform("SMAA_RT_METRICS"_name, glm::vec4(1.0f / window_width, 1.0f / window_height,
+                                                                              window_width, window_height));
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);

@@ -10,13 +10,12 @@ uniform sampler2D colorTex;
 uniform sampler2D blendTex;
 
 uniform vec2 resolution;
+uniform vec4 SMAA_RT_METRICS;
 
 in vec2 vTexCoord0;
 in vec4 vOffset;
 
 out vec4 frag_colour;
-
-vec4 SMAA_RT_METRICS = vec4(1.0 / resolution.x, 1.0 / resolution.y, resolution.x, resolution.y);
 
 /**
  * Conditional move:
