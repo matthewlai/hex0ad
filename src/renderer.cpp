@@ -8,6 +8,9 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/string_cast.hpp"
 
+#include "smaa/AreaTex.h"
+#include "smaa/SearchTex.h"
+
 #include "platform_includes.h"
 #include "texture_manager.h"
 
@@ -104,13 +107,16 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     shadow_fb_ = FrameBuffer(kShadowMapSize, kShadowMapSize, /*have_colour=*/false, /*have_depth=*/true);
     TextureManager::GetInstance()->BindTexture(shadow_fb_->DepthTex(), GL_TEXTURE0 + kShadowTextureUnit);
 
+    geometry_fb_ = FrameBuffer(window_width, window_height, /*have_colour=*/true, /*have_depth=*/true);
+    TextureManager::GetInstance()->BindTexture(geometry_fb_->ColourTex(), GL_TEXTURE0 + kGeometryColourTextureUnit);
+
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // Oversized triangle.
     std::vector<float> positions;
-    positions.push_back(0.0f); positions.push_back(0.0f); // v0
-    positions.push_back(0.0f); positions.push_back(2.0f); // v1
-    positions.push_back(2.0f); positions.push_back(0.0f); // v2
+    positions.push_back(-1.0f); positions.push_back(-1.0f); // v0
+    positions.push_back(3.0f); positions.push_back(-1.0f); // v1
+    positions.push_back(-1.0f); positions.push_back(3.0f); // v2
 
     std::vector<GLuint> indices;
     indices.push_back(0); indices.push_back(1); indices.push_back(2);
@@ -119,6 +125,20 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
       VBOSpec(positions, 0, GL_FLOAT, 2),
     },
     EBOSpec(indices));
+
+    // SMAA
+    smaa_data_ = SMAAData();
+    smaa_data_->area_tex_ = TextureFromMemory(
+      AREATEX_WIDTH, AREATEX_HEIGHT, /*internal_format=*/GL_RG8, /*format=*/GL_RG,
+      /*type=*/GL_UNSIGNED_BYTE, areaTexBytes);
+    smaa_data_->search_tex_ = TextureFromMemory(
+      SEARCHTEX_WIDTH, SEARCHTEX_HEIGHT, /*internal_format=*/GL_R8, /*format=*/GL_RED,
+      /*type=*/GL_UNSIGNED_BYTE, searchTexBytes);
+    TextureManager::GetInstance()->BindTexture(smaa_data_->area_tex_, GL_TEXTURE0 + kSmaaAreaTexTextureUnit);
+    TextureManager::GetInstance()->BindTexture(smaa_data_->search_tex_, GL_TEXTURE0 + kSmaaSearchTexTextureUnit);
+    smaa_data_->edges_shader_ = GetShader("smaa_edges.vs", "smaa_edges_luma.fs");
+    smaa_data_->weights_shader_ = GetShader("smaa_weights.vs", "smaa_weights.fs");
+    smaa_data_->blending_shader_ = GetShader("smaa_blend.vs", "smaa_blend.fs");
   }
 
   SDL_GL_GetDrawableSize(window_, &window_width, &window_height);
@@ -128,6 +148,14 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     last_window_height_ = window_height;
 
     // Resize our textures (don't resize shadow map).
+    if (geometry_fb_) {
+      geometry_fb_->Resize(window_width, window_height);
+    }
+
+    if (smaa_data_) {
+      smaa_data_->edge_fbo_->Resize(window_width, window_height);
+      smaa_data_->weights_fbo_->Resize(window_width, window_height);
+    }
   }
   
   uint64_t time_now = GetTimeUs();
@@ -168,7 +196,13 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
   }
 
   // Geometry pass
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  // If we are doing SMAA (or any other post processing), we have to render into a framebuffer. Otherwise
+  // we can render into the back buffer directly.
+  if (UseSMAA()) {
+    geometry_fb_->Bind();
+  } else {
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  }
   glViewport(0, 0, window_width, window_height);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -187,9 +221,48 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     renderable->Render(&render_context_);
   }
 
+  glDisable(GL_DEPTH_TEST);
+
+  if (UseSMAA()) {
+    // First pass - detect edges using luma.
+    smaa_data_->edges_shader_->Activate();
+    smaa_data_->edges_shader_->SetUniform("resolution"_name, glm::vec2(window_width, window_height));
+    smaa_data_->edges_shader_->SetUniform("colorTex"_name, kGeometryColourTextureUnit);
+    if (!smaa_data_->edge_fbo_) {
+      smaa_data_->edge_fbo_ = FrameBuffer(window_width, window_height, /*have_colour=*/true, /*have_depth=*/false);
+      TextureManager::GetInstance()->BindTexture(smaa_data_->edge_fbo_->ColourTex(), GL_TEXTURE0 + kSmaaEdgesTextureUnit);
+    }
+    smaa_data_->edge_fbo_->Bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    DrawFullScreen();
+
+    // Second pass - calculate blending weights.
+    smaa_data_->weights_shader_->Activate();
+    smaa_data_->weights_shader_->SetUniform("resolution"_name, glm::vec2(window_width, window_height));
+    smaa_data_->weights_shader_->SetUniform("edgesTex"_name, kSmaaEdgesTextureUnit);
+    smaa_data_->weights_shader_->SetUniform("areaTex"_name, kSmaaAreaTexTextureUnit);
+    smaa_data_->weights_shader_->SetUniform("searchTex"_name, kSmaaSearchTexTextureUnit);
+    if (!smaa_data_->weights_fbo_) {
+      smaa_data_->weights_fbo_ = FrameBuffer(window_width, window_height, /*have_colour=*/true, /*have_depth=*/false);
+      TextureManager::GetInstance()->BindTexture(smaa_data_->weights_fbo_->ColourTex(), GL_TEXTURE0 + kSmaaWeightsTextureUnit);
+    }
+    smaa_data_->weights_fbo_->Bind();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    DrawFullScreen();
+
+    // Third pass - actual blending into back buffer.
+    smaa_data_->blending_shader_->Activate();
+    smaa_data_->blending_shader_->SetUniform("resolution"_name, glm::vec2(window_width, window_height));
+    smaa_data_->blending_shader_->SetUniform("colorTex"_name, kGeometryColourTextureUnit);
+    smaa_data_->blending_shader_->SetUniform("blendTex"_name, kSmaaWeightsTextureUnit);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    DrawFullScreen();
+  }
+
   // UI pass.
   glEnable(GL_BLEND);
-  glDisable(GL_DEPTH_TEST);
 
   render_context_.pass = RenderPass::kUi;
   for (auto* renderable : renderables) {

@@ -25,6 +25,12 @@ constexpr GLint kShadowTextureUnit = 8;
 // For Geometry pass output, SMAA pass input.
 constexpr GLint kGeometryColourTextureUnit = 9;
 
+constexpr GLint kSmaaEdgesTextureUnit = 10;
+
+constexpr GLint kSmaaAreaTexTextureUnit = 11;
+constexpr GLint kSmaaSearchTexTextureUnit = 12;
+constexpr GLint kSmaaWeightsTextureUnit = 13;
+
 enum class RenderPass {
   // Shadow map pass. Depth testing enabled, MVP is ortho from light position.
   kShadow,
@@ -193,6 +199,7 @@ class Renderer {
   #undef GraphicsSetting
 
  private:
+  // TODO: add support for deallocating the textures.
   class FrameBuffer {
    public:
     FrameBuffer(int width, int height, bool have_colour, bool have_depth);
@@ -240,6 +247,20 @@ class Renderer {
 
   // Target of the shadow map pass.
   std::optional<FrameBuffer> shadow_fb_;
+
+  // Target of the geometry pass.
+  std::optional<FrameBuffer> geometry_fb_;
+
+  struct SMAAData {
+    GLuint area_tex_;
+    GLuint search_tex_;
+    ShaderProgram* edges_shader_;
+    ShaderProgram* weights_shader_;
+    ShaderProgram* blending_shader_;
+    std::optional<FrameBuffer> edge_fbo_;
+    std::optional<FrameBuffer> weights_fbo_;
+  };
+  std::optional<SMAAData> smaa_data_;
 
   GLuint fullscreen_vao_id_;
 };

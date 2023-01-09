@@ -6,6 +6,30 @@
 
 namespace {
 static constexpr const char* kTexturePathPrefix = "assets/art/textures/";
+
+// This is an unused texture unit used for loading and setting texture params.
+// Number of texture units must be at least 32.
+static constexpr const GLenum kUnusedTextureUnit = 31;
+}
+
+GLuint TextureFromMemory(int width, int height, GLint internal_format,
+                         GLenum format, GLenum type, const uint8_t* data) {
+  glActiveTexture(GL_TEXTURE0 + kUnusedTextureUnit);
+  CHECK_GL_ERROR;
+  GLuint texture_id;
+  glGenTextures(1, &texture_id);
+  CHECK_GL_ERROR;
+  glBindTexture(GL_TEXTURE_2D, texture_id);
+  CHECK_GL_ERROR;
+  glTexImage2D(GL_TEXTURE_2D, /*level=*/0, internal_format, width, height,
+               /*border=*/0, format, type, data);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  return texture_id;
 }
 
 void TextureManager::BindTexture(const std::string& texture_name, GLenum texture_unit) {
@@ -46,6 +70,9 @@ void TextureManager::BindTexture(const std::string& texture_name, GLenum texture
 }
 
 void TextureManager::BindTexture(GLuint texture, GLenum texture_unit) {
+  if (texture_unit < GL_TEXTURE0) {
+    LOG_FATAL("Texture unit must be GL_TEXTURE0 + n");
+  }
   glActiveTexture(texture_unit);
   glBindTexture(GL_TEXTURE_2D, texture);
 }

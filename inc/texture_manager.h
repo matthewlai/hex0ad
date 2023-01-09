@@ -17,6 +17,11 @@ struct TextureSet {
   std::string ao_texture;
 };
 
+// This is a low level interface for loading textures. Except for special
+// cases like SMAA area/search textures, we should use TextureManager instead.
+GLuint TextureFromMemory(int width, int height, GLint internal_format,
+                         GLenum format, GLenum type, const uint8_t* data);
+
 // This class manages all texture-related operations including activating
 // texture units, loading and uploading textures to the GPU when necessary
 // (on first use), and binding textures.

@@ -8,5 +8,6 @@
   GraphicsSetting(UseSpecularHighlight, use_specular_highlight, bool, true, SDLK_h) \
   GraphicsSetting(UseAOMap, use_ao_map, bool, true, SDLK_a) \
   GraphicsSetting(UseShadows, use_shadows, bool, true, SDLK_s) \
+  GraphicsSetting(UseSMAA, use_smaa, bool, true, SDLK_f) \
 
 #endif // GRAPHICS_SETTINGS_H

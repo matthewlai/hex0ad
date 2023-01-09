@@ -36,7 +36,45 @@
 
 #define CHECK_GL_ERROR \
     do { auto error = glGetError(); if (error != GL_NO_ERROR) { \
-      LOG_ERROR("OpenGL error: % (%:%)", error, __FILE__, __LINE__); abort(); }} while (0);
+      LOG_ERROR("OpenGL error: % (%:%)", gl_error_string(error), __FILE__, __LINE__); abort(); }} while (0);
+
+inline char const* gl_error_string(GLenum const err) noexcept {
+  switch (err) {
+    // opengl 2 errors (8)
+    case GL_NO_ERROR:
+      return "GL_NO_ERROR";
+
+    case GL_INVALID_ENUM:
+      return "GL_INVALID_ENUM";
+
+    case GL_INVALID_VALUE:
+      return "GL_INVALID_VALUE";
+
+    case GL_INVALID_OPERATION:
+      return "GL_INVALID_OPERATION";
+
+    case GL_STACK_OVERFLOW:
+      return "GL_STACK_OVERFLOW";
+
+    case GL_STACK_UNDERFLOW:
+      return "GL_STACK_UNDERFLOW";
+
+    case GL_OUT_OF_MEMORY:
+      return "GL_OUT_OF_MEMORY";
+
+    case GL_TABLE_TOO_LARGE:
+      return "GL_TABLE_TOO_LARGE";
+
+    // opengl 3 errors (1)
+    case GL_INVALID_FRAMEBUFFER_OPERATION:
+      return "GL_INVALID_FRAMEBUFFER_OPERATION";
+
+    // gles 2, 3 and gl 4 error are handled by the switch above
+    default:
+      assert(!"unknown error");
+      return nullptr;
+  }
+}
 
 std::vector<std::uint8_t> ReadWholeFile(const std::string& path);
 
