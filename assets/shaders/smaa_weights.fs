@@ -38,6 +38,7 @@ precision highp int;
 #endif
 
 uniform vec2 resolution;
+uniform vec4 SMAA_RT_METRICS;
 
 uniform sampler2D edgesTex;
 uniform sampler2D areaTex;
@@ -48,8 +49,6 @@ in vec4 vOffset[3];
 in vec2 vPixCoord;
 
 out vec4 frag_colour;
-
-vec4 SMAA_RT_METRICS = vec4(1.0 / resolution.x, 1.0 / resolution.y, resolution.x, resolution.y);
 
 #define mad(a, b, c) (a * b + c)
 #define saturate(a) clamp(a, 0.0, 1.0)

@@ -239,6 +239,8 @@ void Renderer::RenderFrame(const std::vector<Renderable*>& renderables) {
     // Second pass - calculate blending weights.
     smaa_data_->weights_shader_->Activate();
     smaa_data_->weights_shader_->SetUniform("resolution"_name, glm::vec2(window_width, window_height));
+    smaa_data_->weights_shader_->SetUniform("SMAA_RT_METRICS"_name, glm::vec4(1.0f / window_width, 1.0f / window_height,
+                                                                              window_width, window_height));
     smaa_data_->weights_shader_->SetUniform("edgesTex"_name, kSmaaEdgesTextureUnit);
     smaa_data_->weights_shader_->SetUniform("areaTex"_name, kSmaaAreaTexTextureUnit);
     smaa_data_->weights_shader_->SetUniform("searchTex"_name, kSmaaSearchTexTextureUnit);
