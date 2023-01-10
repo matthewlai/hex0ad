@@ -65,9 +65,11 @@ SDL_GLContext InitSDL() {
   //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLEBUFFERS, 1);
   //SDL_GL_SetAttribute(SDL_GL_MULTISAMPLESAMPLES, 4);
 
+  auto window_flags = SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI;
+
   g_state.window = SDL_CreateWindow(
       "hex0ad", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-      kScreenWidth, kScreenHeight, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+      kScreenWidth, kScreenHeight, window_flags);
   CHECK_SDL_ERROR_PTR(g_state.window);
   
   auto context = SDL_GL_CreateContext(g_state.window);
